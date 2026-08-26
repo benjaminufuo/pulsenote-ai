@@ -25,6 +25,16 @@ app.use(express.urlencoded({ extended: true }));
 // Serve uploaded audio/video files statically
 app.use('/uploads', express.static(ENV.UPLOADS_DIR));
 
+// Root Welcome Endpoint
+app.get('/', (req, res) => {
+  res.json({
+    status: 'online',
+    app: 'PulseNote AI API Backend Server',
+    health: '/api/health',
+    timestamp: new Date().toISOString()
+  });
+});
+
 // API Health Check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', app: 'PulseNote AI Server', timestamp: new Date().toISOString() });
