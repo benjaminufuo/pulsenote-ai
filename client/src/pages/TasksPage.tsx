@@ -44,7 +44,7 @@ export const TasksPage: React.FC = () => {
 
   return (
     <div className="page-container-medium">
-      <div className="kpi-card-header">
+      <div className="tasks-page-header">
         <div>
           <h1 className="dashboard-banner-title" style={{ fontSize: '1.75rem' }}>Action Items & Tasks</h1>
           <p className="dashboard-banner-subtitle">
@@ -52,13 +52,13 @@ export const TasksPage: React.FC = () => {
           </p>
         </div>
 
-        <div className="speaker-label-row tasks-page-filters-box">
+        <div className="tasks-page-filters-box">
           {['all', 'pending', 'completed'].map((f) => (
             <button
               key={f}
               onClick={() => setFilter(f as any)}
               className={`speed-btn ${filter === f ? 'speed-btn-active' : ''}`}
-              style={{ textTransform: 'capitalize' }}
+              style={{ textTransform: 'capitalize', flex: 1 }}
             >
               {f}
             </button>
@@ -77,8 +77,8 @@ export const TasksPage: React.FC = () => {
       ) : (
         <div className="meetings-list-stack">
           {tasks.map((task) => (
-            <div key={task.id} className="card action-item-row">
-              <div className="speaker-label-row" style={{ flex: 1, minWidth: 0 }}>
+            <div key={task.id} className="card task-item-card">
+              <div className="speaker-label-row" style={{ flex: 1, minWidth: 0, gap: '0.75rem' }}>
                 <input
                   type="checkbox"
                   checked={task.completed}
@@ -90,7 +90,7 @@ export const TasksPage: React.FC = () => {
                     {task.task}
                   </div>
 
-                  <div className="meeting-card-date" style={{ display: 'flex', gap: '1rem' }}>
+                  <div className="meeting-card-date" style={{ display: 'flex', gap: '1rem', marginTop: '4px', flexWrap: 'wrap' }}>
                     <span>👤 {task.assigneeName || 'Unassigned'}</span>
                     {task.dueDate && <span>📅 Due {new Date(task.dueDate).toLocaleDateString()}</span>}
                   </div>
@@ -100,10 +100,12 @@ export const TasksPage: React.FC = () => {
               {task.meeting && (
                 <button
                   onClick={() => navigate(`/meetings/${task.meeting.id}`)}
-                  className="btn btn-outline timestamp-jump-btn"
+                  className="btn btn-outline timestamp-jump-btn task-source-btn"
                 >
-                  <span>From: {task.meeting.title}</span>
-                  <ExternalLink size={12} />
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    From: {task.meeting.title}
+                  </span>
+                  <ExternalLink size={12} style={{ flexShrink: 0 }} />
                 </button>
               )}
             </div>

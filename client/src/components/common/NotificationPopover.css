@@ -20,6 +20,7 @@
   top: calc(100% + 8px);
   right: 0;
   width: 320px;
+  max-width: calc(100vw - 2rem);
   background: var(--bg-surface);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
@@ -47,8 +48,25 @@
   background: transparent;
   cursor: pointer;
   transition: background 0.2s ease;
+  word-break: break-word;
+  white-space: normal;
 }
 
 .notif-item-unread {
   background: var(--color-primary-light);
+}
+
+/* Mobile Responsive Notification Popover Positioning (< 768px) */
+@media (max-width: 768px) {
+  .notif-popover-menu {
+    position: fixed;
+    top: 68px;
+    left: 50%;
+    transform: translateX(-50%);
+    right: auto;
+    width: calc(100vw - 1.5rem);
+    max-width: 380px;
+    z-index: 120;
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.3);
+  }
 }

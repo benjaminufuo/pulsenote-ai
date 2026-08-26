@@ -46,7 +46,7 @@ export const MeetingsPage: React.FC = () => {
   return (
     <div className="page-container">
       {/* Header Bar */}
-      <div className="kpi-card-header" style={{ marginBottom: 0 }}>
+      <div className="kpi-card-header" style={{ marginBottom: 0, flexWrap: 'wrap', gap: '0.75rem' }}>
         <div>
           <h1 className="dashboard-banner-title" style={{ fontSize: '1.75rem' }}>Meeting Library</h1>
           <p className="dashboard-banner-subtitle">
@@ -65,7 +65,7 @@ export const MeetingsPage: React.FC = () => {
       {/* Filter and View Controls Bar */}
       <div className="card header-container meetings-page-filter-bar">
         {/* Search */}
-        <div className="input-with-icon-wrapper" style={{ flex: 1, minWidth: '220px' }}>
+        <div className="input-with-icon-wrapper" style={{ flex: 1, minWidth: '180px', width: '100%' }}>
           <Search size={18} className="input-left-icon" />
           <input
             type="text"
@@ -78,7 +78,7 @@ export const MeetingsPage: React.FC = () => {
         </div>
 
         {/* Dropdowns & View Toggle */}
-        <div className="speaker-label-row">
+        <div className="meetings-filter-row">
           <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
             <option value="ALL">All Statuses</option>
             <option value="COMPLETED">Completed</option>
@@ -86,7 +86,7 @@ export const MeetingsPage: React.FC = () => {
           </select>
 
           <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
-            <option value="ALL">All Meeting Types</option>
+            <option value="ALL">All Types</option>
             <option value="Internal">Internal</option>
             <option value="Client">Client</option>
             <option value="1-on-1">1-on-1</option>
@@ -94,16 +94,18 @@ export const MeetingsPage: React.FC = () => {
           </select>
 
           {/* Grid/List Toggle */}
-          <div className="speaker-label-row" style={{ border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', gap: 0, overflow: 'hidden' }}>
+          <div style={{ display: 'flex', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', gap: 0, overflow: 'hidden' }}>
             <button
               onClick={() => setViewMode('grid')}
               className={`speed-btn ${viewMode === 'grid' ? 'speed-btn-active' : ''}`}
+              title="Grid View"
             >
               <LayoutGrid size={18} />
             </button>
             <button
               onClick={() => setViewMode('list')}
               className={`speed-btn ${viewMode === 'list' ? 'speed-btn-active' : ''}`}
+              title="List View"
             >
               <List size={18} />
             </button>

@@ -1,3 +1,10 @@
+.header-wrapper {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  width: 100%;
+}
+
 .header-container {
   height: 64px;
   border-bottom: 1px solid var(--border-color);
@@ -6,9 +13,22 @@
   align-items: center;
   justify-content: space-between;
   padding: 0 1.5rem;
-  position: sticky;
-  top: 0;
-  z-index: 30;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.header-mobile-brand {
+  display: none;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+
+.mobile-menu-toggle-btn {
+  display: none;
+  padding: 0.4rem;
+  border-radius: var(--radius-md);
 }
 
 .header-search-form {
@@ -150,4 +170,69 @@
 
 .user-dropdown-btn-danger {
   color: #EF4444;
+}
+
+/* Mobile Dropdown Panel Styles */
+.mobile-header-dropdown-panel {
+  display: none;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-color);
+  padding: 1.25rem;
+  box-shadow: var(--shadow-lg);
+  flex-direction: column;
+  gap: 1rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.mobile-panel-search-form {
+  width: 100%;
+}
+
+.mobile-panel-item {
+  display: flex;
+  flex-direction: column;
+}
+
+.mobile-panel-item-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0;
+}
+
+.mobile-panel-user-box {
+  background: var(--bg-subtle);
+  padding: 0.875rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+}
+
+/* Mobile Responsiveness Rules (< 768px) */
+@media (max-width: 768px) {
+  .header-container {
+    padding: 0 0.875rem;
+  }
+
+  .header-mobile-brand {
+    display: flex;
+  }
+
+  .desktop-only-inline {
+    display: none !important;
+  }
+
+  .header-search-form {
+    display: none;
+  }
+
+  .mobile-menu-toggle-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .mobile-header-dropdown-panel {
+    display: flex;
+  }
 }
