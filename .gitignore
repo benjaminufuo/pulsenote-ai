@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build Outputs
+dist/
+build/
+
+# Environment Variables & Secrets
+.env
+.env.local
+.env.production
+
+# Database & Uploads
+*.db
+*.db-journal
+server/prisma/dev.db
+server/uploads/*
+!server/uploads/.gitkeep
+
+# IDE & System Files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

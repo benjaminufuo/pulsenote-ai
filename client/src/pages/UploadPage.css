@@ -1,0 +1,52 @@
+.dropzone-container {
+  border: 2px dashed var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 3rem 1.5rem;
+  background: var(--bg-subtle);
+  cursor: pointer;
+  margin-bottom: 2rem;
+  transition: all 0.2s ease;
+}
+
+.dropzone-active {
+  border-color: var(--color-primary);
+  background: var(--color-primary-light);
+}
+
+.dropzone-content {
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.dropzone-icon {
+  margin-bottom: 1rem;
+  color: var(--color-primary);
+}
+
+.progress-container {
+  margin-bottom: 1.5rem;
+  text-align: left;
+}
+
+.progress-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+
+.progress-track {
+  height: 8px;
+  background: var(--bg-subtle);
+  border-radius: 9999px;
+  overflow: hidden;
+}
+
+.progress-bar {
+  height: 100%;
+  background: var(--color-primary);
+  transition: width 0.3s ease;
+}

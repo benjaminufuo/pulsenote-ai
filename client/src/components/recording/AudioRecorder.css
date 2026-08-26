@@ -1,0 +1,86 @@
+.recorder-card {
+  text-align: center;
+  padding: 2.5rem 1.5rem;
+}
+
+.recorder-title {
+  font-size: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.recorder-subtitle {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  margin-bottom: 2rem;
+}
+
+.error-banner {
+  background: rgba(239, 68, 68, 0.12);
+  color: #DC2626;
+  padding: 0.875rem 1rem;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+  text-align: left;
+  font-size: 0.875rem;
+}
+
+.form-group {
+  margin-bottom: 1.5rem;
+  text-align: left;
+}
+
+.form-label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.form-input-full {
+  width: 100%;
+}
+
+.recorder-visualizer-box {
+  height: 100px;
+  background: var(--bg-subtle);
+  border-radius: var(--radius-md);
+  margin-bottom: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  position: relative;
+}
+
+.visualizer-canvas {
+  width: 100%;
+  height: 100%;
+}
+
+.visualizer-placeholder {
+  position: absolute;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}
+
+.recorder-timer {
+  font-size: 2.5rem;
+  font-weight: 800;
+  font-family: monospace;
+  color: var(--text-main);
+  margin-bottom: 2rem;
+}
+
+.recorder-timer-active {
+  color: #EF4444;
+}
+
+.recorder-actions-row {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+}

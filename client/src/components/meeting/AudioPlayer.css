@@ -1,0 +1,55 @@
+.audio-player-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 1rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  box-shadow: var(--shadow-sm);
+}
+
+.audio-seekbar-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.audio-time-label {
+  font-size: 0.8rem;
+  font-family: monospace;
+  color: var(--text-muted);
+}
+
+.audio-slider {
+  flex: 1;
+  accent-color: var(--color-primary);
+  cursor: pointer;
+}
+
+.audio-controls-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.speed-selector-group {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.speed-btn {
+  font-size: 0.75rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--radius-sm);
+  font-weight: 400;
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.speed-btn-active {
+  font-weight: 700;
+  background: var(--color-primary-light);
+  color: var(--color-primary);
+}

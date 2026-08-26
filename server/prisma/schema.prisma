@@ -1,0 +1,154 @@
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id           String            @id @default(uuid())
+  email        String            @unique
+  name         String
+  passwordHash String
+  avatarUrl    String?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  memberships  WorkspaceMember[]
+  meetings     Meeting[]         @relation("CreatedMeetings")
+  assignedTasks ActionItem[]     @relation("UserTasks")
+  notifications Notification[]
+}
+
+model Workspace {
+  id          String            @id @default(uuid())
+  name        String
+  slug        String            @unique
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  members     WorkspaceMember[]
+  meetings    Meeting[]
+}
+
+model WorkspaceMember {
+  id          String    @id @default(uuid())
+  workspaceId String
+  userId      String
+  role        String    @default("MEMBER") // OWNER, ADMIN, MEMBER
+  createdAt   DateTime  @default(now())
+
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+}
+
+model Meeting {
+  id              String               @id @default(uuid())
+  workspaceId     String
+  title           String
+  date            DateTime             @default(now())
+  durationSeconds Int                  @default(0)
+  audioUrl        String?
+  status          String               @default("UPLOADING") // UPLOADING, PROCESSING_AUDIO, TRANSCRIBING, IDENTIFYING_SPEAKERS, GENERATING_SUMMARY, GENERATING_ACTION_ITEMS, COMPLETED, FAILED
+  errorMessage    String?
+  meetingType     String               @default("Internal") // Internal, Client, 1-on-1, All Hands
+  createdById     String
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  workspace       Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy       User                 @relation("CreatedMeetings", fields: [createdById], references: [id])
+  participants    MeetingParticipant[]
+  recordings      Recording[]
+  transcript      Transcript?
+  summary         MeetingSummary?
+  actionItems     ActionItem[]
+}
+
+model MeetingParticipant {
+  id           String   @id @default(uuid())
+  meetingId    String
+  name         String
+  email        String?
+  speakerLabel String?  // e.g. "Speaker 1", "Speaker 2"
+
+  meeting      Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+}
+
+model Recording {
+  id              String   @id @default(uuid())
+  meetingId       String
+  fileKey         String
+  mimeType        String
+  sizeBytes       Int
+  durationSeconds Int      @default(0)
+  createdAt       DateTime @default(now())
+
+  meeting         Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+}
+
+model Transcript {
+  id        String              @id @default(uuid())
+  meetingId String              @unique
+  fullText  String
+  language  String              @default("en")
+  createdAt DateTime            @default(now())
+
+  meeting   Meeting             @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  segments  TranscriptSegment[]
+}
+
+model TranscriptSegment {
+  id           String     @id @default(uuid())
+  transcriptId String
+  speakerLabel String
+  speakerName  String
+  startTime    Float      // in seconds
+  endTime      Float      // in seconds
+  text         String
+
+  transcript   Transcript @relation(fields: [transcriptId], references: [id], onDelete: Cascade)
+}
+
+model MeetingSummary {
+  id         String   @id @default(uuid())
+  meetingId  String   @unique
+  overview   String
+  keyPoints  String   // JSON string array
+  decisions  String   // JSON string array
+  questions  String   // JSON string array
+  topics     String   // JSON string array
+  createdAt  DateTime @default(now())
+
+  meeting    Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+}
+
+model ActionItem {
+  id             String    @id @default(uuid())
+  meetingId      String
+  task           String
+  assigneeName   String?
+  assigneeUserId String?
+  dueDate        DateTime?
+  completed      Boolean   @default(false)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  meeting        Meeting   @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  assigneeUser   User?     @relation("UserTasks", fields: [assigneeUserId], references: [id], onDelete: SetNull)
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  title     String
+  message   String
+  read      Boolean  @default(false)
+  type      String   @default("info") // info, success, warning
+  link      String?
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}

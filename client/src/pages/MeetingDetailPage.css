@@ -1,0 +1,11 @@
+.meeting-workspace-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  gap: 1.5rem;
+}
+
+@media (max-width: 1024px) {
+  .meeting-workspace-grid {
+    grid-template-columns: 1fr;
+  }
+}

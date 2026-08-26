@@ -1,0 +1,32 @@
+.auth-wrapper {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: var(--bg-app);
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 420px;
+  padding: 2.5rem 1.75rem;
+}
+
+.auth-logo-box {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #804BF2, #f2ae30);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #FFF;
+  margin-bottom: 0.75rem;
+}
+
+.demo-fill-button {
+  font-size: 0.8rem;
+  color: var(--color-primary);
+  font-weight: 600;
+}

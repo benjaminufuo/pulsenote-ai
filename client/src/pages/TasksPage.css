@@ -1,0 +1,5 @@
+.tasks-page-filters-box {
+  background: var(--bg-subtle);
+  padding: 4px;
+  border-radius: var(--radius-md);
+}

@@ -1,0 +1,39 @@
+.bot-header-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(128, 75, 242, 0.2), rgba(242, 174, 48, 0.2));
+  color: var(--color-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 1.25rem auto;
+}
+
+.input-with-icon-wrapper {
+  position: relative;
+}
+
+.input-left-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+}
+
+.platform-chips-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+  margin: 0.5rem 0;
+}
+
+.platform-chip {
+  background: var(--bg-subtle);
+  padding: 0.625rem;
+  border-radius: var(--radius-sm);
+  text-align: center;
+  font-size: 0.75rem;
+  font-weight: 600;
+}

@@ -1,0 +1,7 @@
+.meetings-page-filter-bar {
+  position: relative;
+  height: auto;
+  flex-wrap: wrap;
+  gap: 1rem;
+  padding: 1rem;
+}
