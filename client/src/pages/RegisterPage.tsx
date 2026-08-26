@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
 import { Sparkles, AlertCircle, KeyRound, Mail, User, Building2, ArrowRight } from 'lucide-react';
+import { getErrorMessage } from '../utils/error';
 import './RegisterPage.css';
 
 export const RegisterPage: React.FC = () => {
@@ -24,7 +25,7 @@ export const RegisterPage: React.FC = () => {
       navigate('/dashboard');
     } catch (err: any) {
       console.error('Registration failed:', err);
-      setError(err.response?.data?.error || 'Registration failed. Please try again.');
+      setError(getErrorMessage(err, 'Registration failed. Please try again.'));
     } finally {
       setIsSubmitting(false);
     }

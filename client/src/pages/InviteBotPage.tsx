@@ -3,6 +3,7 @@ import { Bot, Video, AlertCircle, Sparkles } from 'lucide-react';
 import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { getErrorMessage } from '../utils/error';
 import './InviteBotPage.css';
 
 export const InviteBotPage: React.FC = () => {
@@ -45,7 +46,7 @@ export const InviteBotPage: React.FC = () => {
       navigate(`/meetings/${res.data.meetingId}`);
     } catch (err: any) {
       console.error('Invite bot error:', err);
-      setError(err.response?.data?.error || 'Failed to dispatch bot to meeting URL.');
+      setError(getErrorMessage(err, 'Failed to dispatch bot to meeting URL.'));
       setIsSubmitting(false);
     }
   };

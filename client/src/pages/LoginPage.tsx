@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
 import { Sparkles, AlertCircle, KeyRound, Mail, ArrowRight } from 'lucide-react';
+import { getErrorMessage } from '../utils/error';
 import './LoginPage.css';
 
 export const LoginPage: React.FC = () => {
@@ -22,7 +23,7 @@ export const LoginPage: React.FC = () => {
       navigate('/dashboard');
     } catch (err: any) {
       console.error('Login failed:', err);
-      setError(err.response?.data?.error || 'Invalid credentials. Please check your email and password.');
+      setError(getErrorMessage(err, 'Invalid credentials. Please check your email and password.'));
     } finally {
       setIsSubmitting(false);
     }

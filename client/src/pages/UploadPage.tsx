@@ -3,6 +3,7 @@ import { UploadCloud, FileAudio, AlertCircle } from 'lucide-react';
 import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { getErrorMessage } from '../utils/error';
 import './UploadPage.css';
 
 export const UploadPage: React.FC = () => {
@@ -86,7 +87,7 @@ export const UploadPage: React.FC = () => {
       navigate(`/meetings/${meetingId}`);
     } catch (err: any) {
       console.error('Upload failed:', err);
-      setError(err.response?.data?.error || 'Failed to upload meeting recording. Please try again.');
+      setError(getErrorMessage(err, 'Failed to upload meeting recording. Please try again.'));
       setIsUploading(false);
     }
   };
