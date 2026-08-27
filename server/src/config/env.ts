@@ -8,5 +8,6 @@ export const ENV = {
   JWT_SECRET: process.env.JWT_SECRET || 'pulsenote-secret-key-production-change-me',
   UPLOADS_DIR: path.join(__dirname, '../../uploads'),
   GEMINI_API_KEY: process.env.GEMINI_API_KEY || '',
+  RECALL_API_KEY: process.env.RECALL_API_KEY || '',
   NODE_ENV: process.env.NODE_ENV || 'development'
 };

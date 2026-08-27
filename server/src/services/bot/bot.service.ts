@@ -1,6 +1,7 @@
 import { prisma } from '../../db/prisma';
 import { pipelineService } from '../pipeline/pipeline.service';
 import { storageService } from '../storage/storage.service';
+import { ENV } from '../../config/env';
 
 export interface BotInviteRequest {
   workspaceId: string;
@@ -38,7 +39,7 @@ export class BotService {
         title,
         meetingType: platform,
         createdById: req.createdById,
-        status: 'PROCESSING_AUDIO', // Bot joins & begins recording
+        status: 'PROCESSING_AUDIO',
         participants: {
           create: [
             { name: botName, speakerLabel: 'Bot Notetaker' }
@@ -47,8 +48,13 @@ export class BotService {
       }
     });
 
-    // 2. Simulate Bot Joining & Audio Recording Cycle
-    this.runVirtualBotLifecycle(meeting.id, req.meetingUrl, platform, title);
+    // 2. If RECALL_API_KEY is present, dispatch real bot via Recall.ai API
+    if (ENV.RECALL_API_KEY) {
+      this.dispatchRecallBot(meeting.id, req.meetingUrl, botName);
+    } else {
+      // Fallback: Virtual Bot Lifecycle for zero-cost offline testing
+      this.runVirtualBotLifecycle(meeting.id, req.meetingUrl, platform, title);
+    }
 
     return {
       meetingId: meeting.id,
@@ -57,6 +63,32 @@ export class BotService {
       status: 'JOINING',
       message: `PulseNote AI bot (${botName}) dispatched to ${platform}.`
     };
+  }
+
+  /**
+   * Dispatch live meeting bot using Recall.ai API
+   */
+  private async dispatchRecallBot(meetingId: string, meetingUrl: string, botName: string) {
+    try {
+      console.log(`[BotService] Dispatching live Recall.ai bot to meeting URL: ${meetingUrl}...`);
+
+      const response = await fetch('https://api.recall.ai/api/v1/bot', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Token ${ENV.RECALL_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          meeting_url: meetingUrl,
+          bot_name: botName
+        })
+      });
+
+      const data = await response.json();
+      console.log(`[BotService] Recall.ai bot response:`, data);
+    } catch (err) {
+      console.error(`[BotService] Failed to dispatch Recall.ai bot:`, err);
+    }
   }
 
   private async runVirtualBotLifecycle(meetingId: string, meetingUrl: string, platform: string, title: string) {
