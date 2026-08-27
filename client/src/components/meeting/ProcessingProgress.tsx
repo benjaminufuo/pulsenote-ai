@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { CheckCircle2, Loader2, Sparkles, AlertCircle, Square } from 'lucide-react';
 import { api } from '../../api/client';
-import { LiveMeetingRecorder } from './LiveMeetingRecorder';
 import './ProcessingProgress.css';
 
 interface ProcessingProgressProps {
@@ -11,7 +10,8 @@ interface ProcessingProgressProps {
 }
 
 const pipelineSteps = [
-  { key: 'PROCESSING_AUDIO', label: 'PulseNote AI active & capturing call discussion' },
+  { key: 'JOINING', label: 'PulseNote AI Puppeteer bot joining Google Meet lobby' },
+  { key: 'PROCESSING_AUDIO', label: 'Bot in meeting & recording live discussion' },
   { key: 'TRANSCRIBING', label: 'Transcribing speech with OpenAI Whisper' },
   { key: 'IDENTIFYING_SPEAKERS', label: 'Identifying meeting speakers' },
   { key: 'GENERATING_SUMMARY', label: 'Generating AI summary with GPT-4o / Gemini' },
@@ -57,7 +57,6 @@ export const ProcessingProgress: React.FC<ProcessingProgressProps> = ({
       eventSource.close();
     };
 
-    // Polling fallback to guarantee progress updates even if SSE is blocked
     const interval = setInterval(async () => {
       try {
         const res = await api.get(`/meetings/${meetingId}`);
@@ -113,20 +112,19 @@ export const ProcessingProgress: React.FC<ProcessingProgressProps> = ({
   };
 
   return (
-    <div className="card recorder-card" style={{ maxWidth: '650px', margin: '1.5rem auto' }}>
+    <div className="card recorder-card" style={{ maxWidth: '600px', margin: '1.5rem auto' }}>
       <div className="bot-header-icon">
         <Sparkles size={28} />
       </div>
 
-      <h3 className="recorder-title">Processing Your Meeting</h3>
+      <h3 className="recorder-title">PulseNote AI Active in Meeting</h3>
       <p className="recorder-subtitle">
-        PulseNote AI is active for this call. Capture your Google Meet audio directly below or finalize when your meeting ends.
+        Our Puppeteer Chromium bot has connected to your Google Meet call, dropped the recording notice in chat, and is recording discussion.
       </p>
 
-      <LiveMeetingRecorder
-        meetingId={meetingId}
-        onRecordingComplete={() => setStatus('TRANSCRIBING')}
-      />
+      <div style={{ background: 'var(--bg-subtle)', padding: '0.85rem 1rem', borderRadius: 'var(--radius-md)', margin: '1rem 0', fontSize: '0.85rem', color: 'var(--text-main)', borderLeft: '3px solid var(--color-primary)' }}>
+        💡 <strong>Google Meet Host Tip</strong>: If your Google Meet room requires host approval, click <strong>"Admit"</strong> when PulseNote AI requests entry into the call!
+      </div>
 
       <div className="meetings-list-stack" style={{ maxWidth: '440px', margin: '1.5rem auto 0' }}>
         {pipelineSteps.map((step) => {
