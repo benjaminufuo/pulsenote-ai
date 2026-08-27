@@ -6,68 +6,68 @@ import { storageService } from '../services/storage/storage.service';
 import { pipelineService } from '../services/pipeline/pipeline.service';
 import { botService } from '../services/bot/bot.service';
 
-export class MeetingController {
-  private async ensureUserAndWorkspace(userId: string, requestedWorkspaceId?: string): Promise<{ userId: string; workspaceId: string }> {
-    // 1. Verify user exists in database
-    let user = await prisma.user.findUnique({ where: { id: userId } });
-    if (!user) {
-      const passwordHash = await bcrypt.hash('password123', 10);
-      user = await prisma.user.create({
-        data: {
-          id: userId,
-          email: `user_${userId.slice(0, 8)}@pulsenote.ai`,
-          name: 'PulseNote User',
-          passwordHash
-        }
-      });
-    }
-
-    // 2. Check if requested workspace exists
-    if (requestedWorkspaceId) {
-      const existingWs = await prisma.workspace.findUnique({ where: { id: requestedWorkspaceId } });
-      if (existingWs) {
-        const isMember = await prisma.workspaceMember.findFirst({
-          where: { workspaceId: existingWs.id, userId: user.id }
-        });
-        if (!isMember) {
-          await prisma.workspaceMember.create({
-            data: { workspaceId: existingWs.id, userId: user.id, role: 'MEMBER' }
-          });
-        }
-        return { userId: user.id, workspaceId: existingWs.id };
-      }
-    }
-
-    // 3. Fallback to user's existing workspace membership
-    const member = await prisma.workspaceMember.findFirst({
-      where: { userId: user.id },
-      include: { workspace: true }
-    });
-
-    if (member && member.workspace) {
-      return { userId: user.id, workspaceId: member.workspaceId };
-    }
-
-    // 4. Create default workspace if none exists
-    const newWs = await prisma.workspace.create({
+async function ensureUserAndWorkspace(userId: string, requestedWorkspaceId?: string): Promise<{ userId: string; workspaceId: string }> {
+  // 1. Verify user exists in database
+  let user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) {
+    const passwordHash = await bcrypt.hash('password123', 10);
+    user = await prisma.user.create({
       data: {
-        name: 'My Workspace',
-        slug: `ws-${user.id.slice(0, 8)}-${Date.now()}`,
-        members: {
-          create: { userId: user.id, role: 'OWNER' }
-        }
+        id: userId,
+        email: `user_${userId.slice(0, 8)}@pulsenote.ai`,
+        name: 'PulseNote User',
+        passwordHash
       }
     });
-
-    return { userId: user.id, workspaceId: newWs.id };
   }
 
+  // 2. Check if requested workspace exists
+  if (requestedWorkspaceId) {
+    const existingWs = await prisma.workspace.findUnique({ where: { id: requestedWorkspaceId } });
+    if (existingWs) {
+      const isMember = await prisma.workspaceMember.findFirst({
+        where: { workspaceId: existingWs.id, userId: user.id }
+      });
+      if (!isMember) {
+        await prisma.workspaceMember.create({
+          data: { workspaceId: existingWs.id, userId: user.id, role: 'MEMBER' }
+        });
+      }
+      return { userId: user.id, workspaceId: existingWs.id };
+    }
+  }
+
+  // 3. Fallback to user's existing workspace membership
+  const member = await prisma.workspaceMember.findFirst({
+    where: { userId: user.id },
+    include: { workspace: true }
+  });
+
+  if (member && member.workspace) {
+    return { userId: user.id, workspaceId: member.workspaceId };
+  }
+
+  // 4. Create default workspace if none exists
+  const newWs = await prisma.workspace.create({
+    data: {
+      name: 'My Workspace',
+      slug: `ws-${user.id.slice(0, 8)}-${Date.now()}`,
+      members: {
+        create: { userId: user.id, role: 'OWNER' }
+      }
+    }
+  });
+
+  return { userId: user.id, workspaceId: newWs.id };
+}
+
+export class MeetingController {
   public async getMeetings(req: AuthenticatedRequest, res: Response) {
     try {
       const { status, meetingType, search } = req.query;
       let requestedWorkspaceId = req.query.workspaceId ? String(req.query.workspaceId) : undefined;
 
-      const verified = await this.ensureUserAndWorkspace(req.user!.id, requestedWorkspaceId);
+      const verified = await ensureUserAndWorkspace(req.user!.id, requestedWorkspaceId);
 
       const whereClause: any = {
         workspaceId: verified.workspaceId
@@ -166,7 +166,7 @@ export class MeetingController {
         return res.status(400).json({ error: 'title is required' });
       }
 
-      const verified = await this.ensureUserAndWorkspace(req.user!.id, req.body.workspaceId);
+      const verified = await ensureUserAndWorkspace(req.user!.id, req.body.workspaceId);
 
       const meeting = await prisma.meeting.create({
         data: {
@@ -193,7 +193,7 @@ export class MeetingController {
         return res.status(400).json({ error: 'Meeting URL is required' });
       }
 
-      const verified = await this.ensureUserAndWorkspace(req.user!.id, req.body.workspaceId);
+      const verified = await ensureUserAndWorkspace(req.user!.id, req.body.workspaceId);
 
       const result = await botService.inviteBotToMeeting({
         workspaceId: verified.workspaceId,
