@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { CheckCircle2, Loader2, Sparkles, AlertCircle, Square } from 'lucide-react';
 import { api } from '../../api/client';
+import { LiveMeetingRecorder } from './LiveMeetingRecorder';
 import './ProcessingProgress.css';
 
 interface ProcessingProgressProps {
@@ -10,11 +11,10 @@ interface ProcessingProgressProps {
 }
 
 const pipelineSteps = [
-  { key: 'JOINING', label: 'AI bot requesting entry in meeting lobby' },
-  { key: 'PROCESSING_AUDIO', label: 'Bot in meeting & recording live discussion' },
-  { key: 'TRANSCRIBING', label: 'Transcribing speech to text' },
+  { key: 'PROCESSING_AUDIO', label: 'PulseNote AI active & capturing call discussion' },
+  { key: 'TRANSCRIBING', label: 'Transcribing speech with OpenAI Whisper' },
   { key: 'IDENTIFYING_SPEAKERS', label: 'Identifying meeting speakers' },
-  { key: 'GENERATING_SUMMARY', label: 'Generating AI summary' },
+  { key: 'GENERATING_SUMMARY', label: 'Generating AI summary with GPT-4o / Gemini' },
   { key: 'GENERATING_ACTION_ITEMS', label: 'Extracting action items & decisions' }
 ];
 
@@ -113,21 +113,22 @@ export const ProcessingProgress: React.FC<ProcessingProgressProps> = ({
   };
 
   return (
-    <div className="card recorder-card" style={{ maxWidth: '600px', margin: '2rem auto' }}>
+    <div className="card recorder-card" style={{ maxWidth: '650px', margin: '1.5rem auto' }}>
       <div className="bot-header-icon">
         <Sparkles size={28} />
       </div>
 
       <h3 className="recorder-title">Processing Your Meeting</h3>
       <p className="recorder-subtitle">
-        Our AI pipeline is recording your meeting, generating structured transcriptions, speaker diarization, and action items.
+        PulseNote AI is active for this call. Capture your Google Meet audio directly below or finalize when your meeting ends.
       </p>
 
-      <div style={{ background: 'var(--bg-subtle)', padding: '0.85rem 1rem', borderRadius: 'var(--radius-md)', margin: '1rem 0', fontSize: '0.85rem', color: 'var(--text-main)', borderLeft: '3px solid var(--color-primary)' }}>
-        💡 <strong>Google Meet Step</strong>: When PulseNote AI requests entry into your Google Meet call, click <strong>"Admit"</strong> in Google Meet so recording begins immediately!
-      </div>
+      <LiveMeetingRecorder
+        meetingId={meetingId}
+        onRecordingComplete={() => setStatus('TRANSCRIBING')}
+      />
 
-      <div className="meetings-list-stack" style={{ maxWidth: '420px', margin: '0 auto' }}>
+      <div className="meetings-list-stack" style={{ maxWidth: '440px', margin: '1.5rem auto 0' }}>
         {pipelineSteps.map((step) => {
           const state = getStepState(step.key);
           return (
@@ -162,7 +163,7 @@ export const ProcessingProgress: React.FC<ProcessingProgressProps> = ({
             style={{ background: '#EF4444', borderColor: '#EF4444', margin: '0 auto', gap: '8px' }}
           >
             {stopping ? <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> : <Square size={16} />}
-            {stopping ? 'Stopping Notetaker...' : 'Stop Notetaker & Finalize Notes'}
+            {stopping ? 'Finalizing AI Notes...' : 'Stop Notetaker & Finalize Notes'}
           </button>
         </div>
       )}
