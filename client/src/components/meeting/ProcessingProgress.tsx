@@ -10,8 +10,8 @@ interface ProcessingProgressProps {
 }
 
 const pipelineSteps = [
-  { key: 'UPLOADING', label: 'Uploading recording' },
-  { key: 'PROCESSING_AUDIO', label: 'Processing audio file' },
+  { key: 'JOINING', label: 'AI bot requesting entry in meeting lobby' },
+  { key: 'PROCESSING_AUDIO', label: 'Bot in meeting & recording live discussion' },
   { key: 'TRANSCRIBING', label: 'Transcribing speech to text' },
   { key: 'IDENTIFYING_SPEAKERS', label: 'Identifying meeting speakers' },
   { key: 'GENERATING_SUMMARY', label: 'Generating AI summary' },
@@ -82,6 +82,7 @@ export const ProcessingProgress: React.FC<ProcessingProgressProps> = ({
   const getStepState = (stepKey: string) => {
     const statusOrder = [
       'UPLOADING',
+      'JOINING',
       'PROCESSING_AUDIO',
       'TRANSCRIBING',
       'IDENTIFYING_SPEAKERS',
@@ -107,7 +108,7 @@ export const ProcessingProgress: React.FC<ProcessingProgressProps> = ({
 
       <h3 className="recorder-title">Processing Your Meeting</h3>
       <p className="recorder-subtitle">
-        Our AI pipeline is turning your meeting into structured transcriptions, speaker diarization, and action items.
+        Our AI pipeline is recording your meeting, generating structured transcriptions, speaker diarization, and action items.
       </p>
 
       <div className="meetings-list-stack" style={{ maxWidth: '420px', margin: '0 auto' }}>

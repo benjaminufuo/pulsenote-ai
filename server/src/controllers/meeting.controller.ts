@@ -45,6 +45,7 @@ export class MeetingController {
         }
       });
 
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
       return res.json(meetings);
     } catch (error: any) {
       console.error('Error fetching meetings:', error);
@@ -89,6 +90,9 @@ export class MeetingController {
           topics: JSON.parse(meeting.summary.topics || '[]')
         };
       }
+
+      // Prevent 304 Caching on status polling
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
 
       return res.json({
         ...meeting,

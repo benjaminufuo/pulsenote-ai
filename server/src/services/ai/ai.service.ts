@@ -1,3 +1,5 @@
+import { ENV } from '../../config/env';
+
 export interface StructuredAIActionItem {
   task: string;
   assigneeName?: string;
@@ -16,19 +18,69 @@ export interface StructuredAINotes {
 export class AIService {
   /**
    * Generates structured meeting notes from transcript.
-   * Can use Google Gemini API if GEMINI_API_KEY is supplied in ENV, or fall back to high-quality NLP extraction engine.
+   * Uses OpenAI GPT-4o / GPT-4o-mini if OPENAI_API_KEY is supplied in ENV, or falls back to NLP extraction engine.
    */
   public async generateMeetingNotes(transcriptText: string, title: string): Promise<StructuredAINotes> {
-    try {
-      // Simulate structured AI processing time
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+    const apiKey = ENV.OPENAI_API_KEY ? ENV.OPENAI_API_KEY.trim() : '';
 
+    if (apiKey) {
+      try {
+        console.log(`[AIService] Generating meeting notes using OpenAI GPT-4o...`);
+        return await this.generateWithOpenAI(transcriptText, title, apiKey);
+      } catch (err) {
+        console.error(`[AIService] OpenAI GPT-4o notes generation failed, falling back:`, err);
+      }
+    }
+
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 1200));
       const notes = this.extractStructuredNotes(transcriptText, title);
       return this.validateAndSanitizeNotes(notes);
     } catch (error) {
       console.error('Error generating AI meeting notes:', error);
       return this.getFallbackNotes(title);
     }
+  }
+
+  private async generateWithOpenAI(transcriptText: string, title: string, apiKey: string): Promise<StructuredAINotes> {
+    const prompt = `You are PulseNote AI, an executive meeting assistant. Analyze the following meeting transcript for "${title}" and return a JSON object with this exact schema:
+{
+  "overview": "A comprehensive 2-3 sentence executive summary of the discussion",
+  "keyPoints": ["Bullet point 1", "Bullet point 2", "Bullet point 3"],
+  "decisions": ["Agreed decision 1", "Agreed decision 2"],
+  "actionItems": [
+    { "task": "Specific action item", "assigneeName": "Person Name", "dueDate": "YYYY-MM-DD" }
+  ],
+  "questions": ["Unresolved question 1"],
+  "topics": ["Topic 1", "Topic 2"]
+}
+
+Meeting Title: ${title}
+Transcript:
+${transcriptText}`;
+
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [{ role: 'user', content: prompt }],
+        response_format: { type: 'json_object' }
+      })
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`OpenAI Chat API returned HTTP ${res.status}: ${errText}`);
+    }
+
+    const data: any = await res.json();
+    const content = data.choices?.[0]?.message?.content || '{}';
+    const parsed = JSON.parse(content);
+    return this.validateAndSanitizeNotes(parsed);
   }
 
   private extractStructuredNotes(transcriptText: string, title: string): StructuredAINotes {

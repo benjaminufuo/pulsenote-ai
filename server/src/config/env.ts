@@ -10,5 +10,6 @@ export const ENV = {
   GEMINI_API_KEY: process.env.GEMINI_API_KEY || '',
   RECALL_API_KEY: process.env.RECALL_API_KEY || '',
   RECALL_REGION: process.env.RECALL_REGION || '',
+  OPENAI_API_KEY: process.env.OPENAI_API_KEY || '',
   NODE_ENV: process.env.NODE_ENV || 'development'
 };
