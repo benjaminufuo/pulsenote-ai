@@ -204,52 +204,36 @@ export class BotService {
         console.error(`[BotService] Error sending leave_call to bot ${botId}:`, err);
       }
 
-      // Poll 3 times with 2.5s delay to download recorded audio file from Recall.ai
-      await new Promise((r) => setTimeout(r, 2500));
+      // Retry polling for up to 45 seconds until Recall.ai finishes rendering the audio/video recording file
+      const mediaUrl = await this.fetchRecordedMediaWithRetry(botId, apiKey, baseUrl);
 
-      for (let attempt = 1; attempt <= 3; attempt++) {
-        try {
-          const response = await fetch(`${baseUrl}/bot/${botId}/`, {
-            headers: { 'Authorization': `Token ${apiKey}` }
-          });
+      if (mediaUrl) {
+        console.log(`[BotService] Downloading recorded audio from Recall.ai: ${mediaUrl}...`);
+        const audioRes = await fetch(mediaUrl);
+        const arrayBuffer = await audioRes.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
 
-          if (response.ok) {
-            const botData = await response.json();
-            const mediaUrl = botData.video_url || botData.audio_url;
+        const storageResult = await storageService.saveFile(buffer, `recall_${botId}.mp3`, 'audio/mp3');
 
-            if (mediaUrl) {
-              console.log(`[BotService] Downloading recorded audio from Recall.ai: ${mediaUrl}...`);
-              const audioRes = await fetch(mediaUrl);
-              const arrayBuffer = await audioRes.arrayBuffer();
-              const buffer = Buffer.from(arrayBuffer);
-
-              const storageResult = await storageService.saveFile(buffer, `recall_${botId}.mp3`, 'audio/mp3');
-
-              await prisma.recording.create({
-                data: {
-                  meetingId,
-                  fileKey: storageResult.fileKey,
-                  mimeType: 'audio/mp3',
-                  sizeBytes: storageResult.sizeBytes
-                }
-              });
-
-              await prisma.meeting.update({
-                where: { id: meetingId },
-                data: {
-                  audioUrl: storageResult.url,
-                  durationSeconds: elapsedSeconds
-                }
-              });
-
-              await pipelineService.processMeetingRecording(meetingId, storageResult.fileKey);
-              return { message: 'Bot left call. Recorded audio downloaded and pipeline finished.' };
-            }
+        await prisma.recording.create({
+          data: {
+            meetingId,
+            fileKey: storageResult.fileKey,
+            mimeType: 'audio/mp3',
+            sizeBytes: storageResult.sizeBytes
           }
-        } catch (err) {
-          console.error(`[BotService] Attempt ${attempt} failed fetching media after leave_call:`, err);
-        }
-        await new Promise((r) => setTimeout(r, 2000));
+        });
+
+        await prisma.meeting.update({
+          where: { id: meetingId },
+          data: {
+            audioUrl: storageResult.url,
+            durationSeconds: elapsedSeconds
+          }
+        });
+
+        await pipelineService.processMeetingRecording(meetingId, storageResult.fileKey);
+        return { message: 'Bot left call. Recorded audio downloaded and pipeline finished.' };
       }
     }
 
@@ -316,8 +300,9 @@ export class BotService {
             return;
           }
 
-          // Fetch recorded audio/video media URL
-          const mediaUrl = botData.video_url || botData.audio_url;
+          // Retry polling for up to 45 seconds until Recall.ai finishes rendering audio file
+          const mediaUrl = await this.fetchRecordedMediaWithRetry(botId, apiKey, baseUrl);
+
           if (mediaUrl) {
             console.log(`[BotService] Downloading recorded audio from Recall.ai: ${mediaUrl}...`);
             const audioRes = await fetch(mediaUrl);
@@ -359,6 +344,33 @@ export class BotService {
         clearInterval(interval);
       }
     }, 4000);
+  }
+
+  /**
+   * Helper method to retry polling Recall.ai for up to 45s (15 attempts) until recorded media URL is available
+   */
+  private async fetchRecordedMediaWithRetry(botId: string, apiKey: string, baseUrl: string): Promise<string | null> {
+    for (let attempt = 1; attempt <= 15; attempt++) {
+      try {
+        console.log(`[BotService] Polling Recall.ai for recorded media URL (attempt ${attempt}/15)...`);
+        const response = await fetch(`${baseUrl}/bot/${botId}/`, {
+          headers: { 'Authorization': `Token ${apiKey}` }
+        });
+
+        if (response.ok) {
+          const botData = await response.json();
+          const mediaUrl = botData.video_url || botData.audio_url;
+          if (mediaUrl) {
+            console.log(`[BotService] Successfully retrieved recorded media URL on attempt ${attempt}: ${mediaUrl}`);
+            return mediaUrl;
+          }
+        }
+      } catch (err) {
+        console.error(`[BotService] Media fetch error on attempt ${attempt}:`, err);
+      }
+      await new Promise((r) => setTimeout(r, 3000));
+    }
+    return null;
   }
 
   /**

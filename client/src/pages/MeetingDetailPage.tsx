@@ -27,7 +27,6 @@ export const MeetingDetailPage: React.FC = () => {
       if (meetingId) {
         api.get(`/meetings/${meetingId}`).then((res) => {
           setMeeting((prev: any) => {
-            // Keep active playing state stable
             if (!prev) return res.data;
             return { ...res.data };
           });
@@ -159,7 +158,7 @@ export const MeetingDetailPage: React.FC = () => {
               </span>
               {isProcessing && (
                 <span className="badge badge-processing" style={{ background: '#EF4444', color: '#FFF', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <Radio size={12} className="recording-pulse" /> LIVE REAL-TIME TRANSCRIPT
+                  <Radio size={12} className="recording-pulse" /> LIVE STREAMING
                 </span>
               )}
             </div>
@@ -172,7 +171,7 @@ export const MeetingDetailPage: React.FC = () => {
             <Calendar size={15} /> {new Date(meeting.date).toLocaleDateString()}
           </span>
           <span className="speaker-label-row">
-            <Clock size={15} /> {Math.round((meeting.durationSeconds || 0) / 60)} min duration
+            <Clock size={15} /> {isProcessing ? '🔴 Recording in progress...' : `${Math.round((meeting.durationSeconds || 0) / 60)} min duration`}
           </span>
           <span className="speaker-label-row">
             <Users size={15} /> {meeting.participants?.map((p: any) => p.name).join(', ') || 'Team'}
