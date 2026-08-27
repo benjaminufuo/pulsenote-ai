@@ -131,10 +131,33 @@ export class MeetingController {
 
   public async inviteBot(req: AuthenticatedRequest, res: Response) {
     try {
-      const { workspaceId, meetingUrl, title, botName } = req.body;
+      let { workspaceId, meetingUrl, title, botName } = req.body;
 
-      if (!workspaceId || !meetingUrl) {
-        return res.status(400).json({ error: 'workspaceId and meetingUrl are required' });
+      if (!meetingUrl) {
+        return res.status(400).json({ error: 'Meeting URL is required' });
+      }
+
+      // If workspaceId is missing from request, resolve user's primary workspace automatically
+      if (!workspaceId && req.user?.id) {
+        const member = await prisma.workspaceMember.findFirst({
+          where: { userId: req.user.id },
+          include: { workspace: true }
+        });
+        if (member) {
+          workspaceId = member.workspaceId;
+        } else {
+          // If user has no workspace, create default workspace for them
+          const newWs = await prisma.workspace.create({
+            data: {
+              name: 'My Workspace',
+              slug: `workspace-${req.user.id.slice(0, 8)}`,
+              members: {
+                create: { userId: req.user.id, role: 'OWNER' }
+              }
+            }
+          });
+          workspaceId = newWs.id;
+        }
       }
 
       const result = await botService.inviteBotToMeeting({
@@ -148,7 +171,7 @@ export class MeetingController {
       return res.status(201).json(result);
     } catch (error: any) {
       console.error('Invite bot error:', error);
-      return res.status(500).json({ error: 'Failed to invite bot to meeting URL' });
+      return res.status(500).json({ error: error.message || String(error) });
     }
   }
 
