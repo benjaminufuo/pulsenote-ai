@@ -210,6 +210,17 @@ export class MeetingController {
     }
   }
 
+  public async leaveBot(req: AuthenticatedRequest, res: Response) {
+    try {
+      const { id } = req.params;
+      const result = await botService.leaveBotFromMeeting(id);
+      return res.json(result);
+    } catch (error: any) {
+      console.error('Leave bot error:', error);
+      return res.status(500).json({ error: error.message || 'Failed to stop bot' });
+    }
+  }
+
   public async uploadRecording(req: AuthenticatedRequest, res: Response) {
     try {
       const { id } = req.params;

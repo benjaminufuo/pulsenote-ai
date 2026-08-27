@@ -10,18 +10,30 @@ interface AudioPlayerProps {
 
 export const AudioPlayer: React.FC<AudioPlayerProps> = ({ src, onTimeUpdate, seekTime }) => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const prevSrcRef = useRef<string>(src);
+
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [isMuted, setIsMuted] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
 
+  // Initialize and update src only when src string actually changes
+  useEffect(() => {
+    if (audioRef.current && prevSrcRef.current !== src) {
+      prevSrcRef.current = src;
+      audioRef.current.src = src;
+      audioRef.current.load();
+      setIsPlaying(false);
+    }
+  }, [src]);
+
   useEffect(() => {
     if (audioRef.current && seekTime !== null && seekTime !== undefined) {
       audioRef.current.currentTime = seekTime;
       setCurrentTime(seekTime);
       if (!isPlaying) {
-        audioRef.current.play();
+        audioRef.current.play().catch(() => {});
         setIsPlaying(true);
       }
     }
@@ -33,8 +45,9 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ src, onTimeUpdate, see
         audioRef.current.pause();
         setIsPlaying(false);
       } else {
-        audioRef.current.play();
-        setIsPlaying(true);
+        audioRef.current.play().then(() => setIsPlaying(true)).catch((err) => {
+          console.error('Audio playback error:', err);
+        });
       }
     }
   };

@@ -10,6 +10,7 @@ router.use(authenticateToken);
 router.get('/', meetingController.getMeetings);
 router.post('/', meetingController.createMeeting);
 router.post('/invite-bot', meetingController.inviteBot);
+router.post('/:id/leave-bot', meetingController.leaveBot);
 router.get('/:id', meetingController.getMeetingById);
 router.delete('/:id', meetingController.deleteMeeting);
 

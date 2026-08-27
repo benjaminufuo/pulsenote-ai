@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { CheckCircle2, Loader2, Sparkles, AlertCircle } from 'lucide-react';
+import { CheckCircle2, Loader2, Sparkles, AlertCircle, Square } from 'lucide-react';
 import { api } from '../../api/client';
 import './ProcessingProgress.css';
 
@@ -24,6 +24,7 @@ export const ProcessingProgress: React.FC<ProcessingProgressProps> = ({
   onCompleted
 }) => {
   const [status, setStatus] = useState(currentStatus);
+  const [stopping, setStopping] = useState(false);
 
   useEffect(() => {
     setStatus(currentStatus);
@@ -79,6 +80,17 @@ export const ProcessingProgress: React.FC<ProcessingProgressProps> = ({
     };
   }, [meetingId, currentStatus]);
 
+  const handleStopBot = async () => {
+    try {
+      setStopping(true);
+      await api.post(`/meetings/${meetingId}/leave-bot`);
+    } catch (err) {
+      console.error('Failed to stop bot:', err);
+    } finally {
+      setStopping(false);
+    }
+  };
+
   const getStepState = (stepKey: string) => {
     const statusOrder = [
       'UPLOADING',
@@ -111,6 +123,10 @@ export const ProcessingProgress: React.FC<ProcessingProgressProps> = ({
         Our AI pipeline is recording your meeting, generating structured transcriptions, speaker diarization, and action items.
       </p>
 
+      <div style={{ background: 'var(--bg-subtle)', padding: '0.85rem 1rem', borderRadius: 'var(--radius-md)', margin: '1rem 0', fontSize: '0.85rem', color: 'var(--text-main)', borderLeft: '3px solid var(--color-primary)' }}>
+        💡 <strong>Google Meet Step</strong>: When PulseNote AI requests entry into your Google Meet call, click <strong>"Admit"</strong> in Google Meet so recording begins immediately!
+      </div>
+
       <div className="meetings-list-stack" style={{ maxWidth: '420px', margin: '0 auto' }}>
         {pipelineSteps.map((step) => {
           const state = getStepState(step.key);
@@ -136,6 +152,20 @@ export const ProcessingProgress: React.FC<ProcessingProgressProps> = ({
           );
         })}
       </div>
+
+      {(status === 'JOINING' || status === 'PROCESSING_AUDIO') && (
+        <div style={{ marginTop: '1.5rem', textAlign: 'center' }}>
+          <button
+            onClick={handleStopBot}
+            disabled={stopping}
+            className="btn btn-primary"
+            style={{ background: '#EF4444', borderColor: '#EF4444', margin: '0 auto', gap: '8px' }}
+          >
+            {stopping ? <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> : <Square size={16} />}
+            {stopping ? 'Stopping Notetaker...' : 'Stop Notetaker & Finalize Notes'}
+          </button>
+        </div>
+      )}
     </div>
   );
 };
