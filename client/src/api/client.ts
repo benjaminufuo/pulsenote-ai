@@ -6,7 +6,8 @@ const baseURL = env && env.VITE_API_URL
   : '/api';
 
 export const api = axios.create({
-  baseURL
+  baseURL,
+  timeout: 45000 // 45 seconds timeout for cold-start resilience
 });
 
 api.interceptors.request.use((config) => {

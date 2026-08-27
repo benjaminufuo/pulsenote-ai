@@ -53,16 +53,19 @@ export class BotService {
 
     const apiKey = ENV.RECALL_API_KEY ? ENV.RECALL_API_KEY.trim() : '';
 
-    if (apiKey) {
-      this.dispatchRecallBot(meeting.id, cleanUrl, botName, apiKey).catch((err) => {
-        console.error(`[BotService] Background dispatch error:`, err);
-      });
-    } else {
-      // Fallback: Virtual Bot Lifecycle for zero-cost offline testing
-      this.runVirtualBotLifecycle(meeting.id, cleanUrl, platform, title).catch((err) => {
-        console.error(`[BotService] Virtual bot error:`, err);
-      });
-    }
+    // Fire background dispatch asynchronously with setImmediate for instant HTTP response (< 30ms)
+    setImmediate(() => {
+      if (apiKey) {
+        this.dispatchRecallBot(meeting.id, cleanUrl, botName, apiKey).catch((err) => {
+          console.error(`[BotService] Background dispatch error:`, err);
+        });
+      } else {
+        // Fallback: Virtual Bot Lifecycle for zero-cost offline testing
+        this.runVirtualBotLifecycle(meeting.id, cleanUrl, platform, title).catch((err) => {
+          console.error(`[BotService] Virtual bot error:`, err);
+        });
+      }
+    });
 
     return {
       meetingId: meeting.id,
@@ -102,6 +105,9 @@ export class BotService {
       try {
         console.log(`[BotService] Attempting Recall.ai dispatch via ${endpoint} for URL: ${meetingUrl}...`);
 
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 4000); // 4s fast timeout per region
+
         const response = await fetch(endpoint, {
           method: 'POST',
           headers: {
@@ -111,8 +117,11 @@ export class BotService {
           body: JSON.stringify({
             meeting_url: meetingUrl,
             bot_name: botName
-          })
+          }),
+          signal: controller.signal
         });
+
+        clearTimeout(timeoutId);
 
         const responseText = await response.text();
         let data: any = {};
@@ -132,7 +141,7 @@ export class BotService {
           lastError = data.detail || data.error || data.message || JSON.stringify(data);
         }
       } catch (err: any) {
-        lastError = err.message || String(err);
+        lastError = err.name === 'AbortError' ? 'Endpoint timeout (4s)' : (err.message || String(err));
       }
     }
 
