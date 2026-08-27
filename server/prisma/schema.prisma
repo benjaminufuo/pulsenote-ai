@@ -1,10 +1,13 @@
-datasource db {
-  provider = "sqlite"
-  url      = "file:./dev.db"
-}
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
   provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
 }
 
 model User {
@@ -55,6 +58,9 @@ model Meeting {
   errorMessage    String?
   meetingType     String               @default("Internal") // Internal, Client, 1-on-1, All Hands
   createdById     String
+  botId           String?
+  botBaseUrl      String?
+  botStartTime    DateTime?
   createdAt       DateTime             @default(now())
   updatedAt       DateTime             @updatedAt
 
@@ -78,15 +84,14 @@ model MeetingParticipant {
 }
 
 model Recording {
-  id              String   @id @default(uuid())
-  meetingId       String
-  fileKey         String
-  mimeType        String
-  sizeBytes       Int
-  durationSeconds Int      @default(0)
-  createdAt       DateTime @default(now())
+  id        String   @id @default(uuid())
+  meetingId String
+  fileKey   String
+  mimeType  String
+  sizeBytes Int
+  createdAt DateTime @default(now())
 
-  meeting         Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  meeting   Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
 }
 
 model Transcript {
@@ -95,6 +100,7 @@ model Transcript {
   fullText  String
   language  String              @default("en")
   createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
 
   meeting   Meeting             @relation(fields: [meetingId], references: [id], onDelete: Cascade)
   segments  TranscriptSegment[]
@@ -103,8 +109,8 @@ model Transcript {
 model TranscriptSegment {
   id           String     @id @default(uuid())
   transcriptId String
-  speakerLabel String
-  speakerName  String
+  speakerLabel String     // "Speaker 1", "Speaker 2"
+  speakerName  String     // "Benjamin", "David"
   startTime    Float      // in seconds
   endTime      Float      // in seconds
   text         String
@@ -113,31 +119,32 @@ model TranscriptSegment {
 }
 
 model MeetingSummary {
-  id         String   @id @default(uuid())
-  meetingId  String   @unique
-  overview   String
-  keyPoints  String   // JSON string array
-  decisions  String   // JSON string array
-  questions  String   // JSON string array
-  topics     String   // JSON string array
-  createdAt  DateTime @default(now())
+  id        String   @id @default(uuid())
+  meetingId String   @unique
+  overview  String
+  keyPoints String   // JSON array of strings
+  decisions String   // JSON array of strings
+  questions String   // JSON array of strings
+  topics    String   // JSON array of strings
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  meeting    Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  meeting   Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
 }
 
 model ActionItem {
-  id             String    @id @default(uuid())
-  meetingId      String
-  task           String
-  assigneeName   String?
-  assigneeUserId String?
-  dueDate        DateTime?
-  completed      Boolean   @default(false)
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  id           String    @id @default(uuid())
+  meetingId    String
+  task         String
+  assigneeId   String?
+  assigneeName String?
+  dueDate      DateTime?
+  completed    Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
-  meeting        Meeting   @relation(fields: [meetingId], references: [id], onDelete: Cascade)
-  assigneeUser   User?     @relation("UserTasks", fields: [assigneeUserId], references: [id], onDelete: SetNull)
+  meeting      Meeting   @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  assignee     User?     @relation("UserTasks", fields: [assigneeId], references: [id])
 }
 
 model Notification {
@@ -145,8 +152,8 @@ model Notification {
   userId    String
   title     String
   message   String
+  type      String   @default("info") // info, success, warning, error
   read      Boolean  @default(false)
-  type      String   @default("info") // info, success, warning
   link      String?
   createdAt DateTime @default(now())
 

@@ -11,8 +11,6 @@ export interface BotInviteRequest {
   createdById: string;
 }
 
-const activeBots = new Map<string, { botId: string; apiKey: string; baseUrl: string; startTime: Date }>();
-
 export class BotService {
   /**
    * Detect meeting provider platform from URL.
@@ -162,12 +160,15 @@ export class BotService {
     const botId = dispatchedBotData.id;
     console.log(`[BotService] Recall.ai bot successfully dispatched! Bot ID: ${botId} on ${successfulEndpoint}`);
 
-    // Track active bot details in memory map for manual leave_call commands
-    activeBots.set(meetingId, {
-      botId,
-      apiKey,
-      baseUrl: successfulEndpoint,
-      startTime: new Date()
+    // Persist bot details directly in PostgreSQL database so restarts or async workers never lose bot context
+    await prisma.meeting.update({
+      where: { id: meetingId },
+      data: {
+        botId,
+        botBaseUrl: successfulEndpoint,
+        botStartTime: new Date(),
+        status: 'PROCESSING_AUDIO'
+      }
     });
 
     // Start background polling to monitor bot status & retrieve real-time transcripts & recorded audio
@@ -178,77 +179,78 @@ export class BotService {
    * Command bot to leave meeting and finalize audio recording & AI notes
    */
   public async leaveBotFromMeeting(meetingId: string) {
-    const active = activeBots.get(meetingId);
-
-    if (!active) {
-      console.log(`[BotService] Meeting ${meetingId} bot not in active map, proceeding to pipeline.`);
-      const sampleBuffer = Buffer.from('PulseNote AI Meeting Audio Stream');
-      const storageResult = await storageService.saveFile(sampleBuffer, `live_meeting_${meetingId}.mp3`, 'audio/mp3');
-      await pipelineService.processMeetingRecording(meetingId, storageResult.fileKey);
-      return { message: 'Bot leave command initiated.' };
+    const meeting = await prisma.meeting.findUnique({ where: { id: meetingId } });
+    if (!meeting) {
+      return { message: 'Meeting not found.' };
     }
 
-    const { botId, apiKey, baseUrl, startTime } = active;
-    activeBots.delete(meetingId);
+    const apiKey = ENV.RECALL_API_KEY ? ENV.RECALL_API_KEY.trim() : '';
+    const botId = meeting.botId;
+    const baseUrl = meeting.botBaseUrl || 'https://us-east-1.recall.ai/api/v1';
+    const startTime = meeting.botStartTime || meeting.createdAt;
+    const elapsedSeconds = Math.max(30, Math.round((Date.now() - new Date(startTime).getTime()) / 1000));
 
-    const elapsedSeconds = Math.max(30, Math.round((Date.now() - startTime.getTime()) / 1000));
-    console.log(`[BotService] Sending leave_call command for Recall bot ${botId} (duration: ${elapsedSeconds}s)...`);
-
-    try {
-      await fetch(`${baseUrl}/bot/${botId}/leave_call/`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Token ${apiKey}`,
-          'Content-Type': 'application/json'
-        }
-      });
-    } catch (err) {
-      console.error(`[BotService] Error sending leave_call to bot ${botId}:`, err);
-    }
-
-    // Wait 2.5 seconds for Recall.ai to process recorded audio file
-    await new Promise((r) => setTimeout(r, 2500));
-
-    try {
-      const response = await fetch(`${baseUrl}/bot/${botId}/`, {
-        headers: { 'Authorization': `Token ${apiKey}` }
-      });
-
-      if (response.ok) {
-        const botData = await response.json();
-        const mediaUrl = botData.video_url || botData.audio_url;
-
-        if (mediaUrl) {
-          console.log(`[BotService] Downloading recorded audio from Recall.ai: ${mediaUrl}...`);
-          const audioRes = await fetch(mediaUrl);
-          const arrayBuffer = await audioRes.arrayBuffer();
-          const buffer = Buffer.from(arrayBuffer);
-
-          const storageResult = await storageService.saveFile(buffer, `recall_${botId}.mp3`, 'audio/mp3');
-
-          await prisma.recording.create({
-            data: {
-              meetingId,
-              fileKey: storageResult.fileKey,
-              mimeType: 'audio/mp3',
-              sizeBytes: storageResult.sizeBytes
-            }
-          });
-
-          await prisma.meeting.update({
-            where: { id: meetingId },
-            data: {
-              audioUrl: storageResult.url,
-              durationSeconds: elapsedSeconds
-            }
-          });
-
-          await pipelineService.processMeetingRecording(meetingId, storageResult.fileKey);
-          return { message: 'Bot left call. Processing audio recording...' };
-        }
+    if (botId && apiKey) {
+      console.log(`[BotService] Sending leave_call command for Recall bot ${botId} (elapsed: ${elapsedSeconds}s)...`);
+      try {
+        await fetch(`${baseUrl}/bot/${botId}/leave_call/`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Token ${apiKey}`,
+            'Content-Type': 'application/json'
+          }
+        });
+      } catch (err) {
+        console.error(`[BotService] Error sending leave_call to bot ${botId}:`, err);
       }
-    } catch (err) {
-      console.error(`[BotService] Error fetching media after leave_call:`, err);
+
+      // Poll 3 times with 2.5s delay to download recorded audio file from Recall.ai
+      await new Promise((r) => setTimeout(r, 2500));
+
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          const response = await fetch(`${baseUrl}/bot/${botId}/`, {
+            headers: { 'Authorization': `Token ${apiKey}` }
+          });
+
+          if (response.ok) {
+            const botData = await response.json();
+            const mediaUrl = botData.video_url || botData.audio_url;
+
+            if (mediaUrl) {
+              console.log(`[BotService] Downloading recorded audio from Recall.ai: ${mediaUrl}...`);
+              const audioRes = await fetch(mediaUrl);
+              const arrayBuffer = await audioRes.arrayBuffer();
+              const buffer = Buffer.from(arrayBuffer);
+
+              const storageResult = await storageService.saveFile(buffer, `recall_${botId}.mp3`, 'audio/mp3');
+
+              await prisma.recording.create({
+                data: {
+                  meetingId,
+                  fileKey: storageResult.fileKey,
+                  mimeType: 'audio/mp3',
+                  sizeBytes: storageResult.sizeBytes
+                }
+              });
+
+              await prisma.meeting.update({
+                where: { id: meetingId },
+                data: {
+                  audioUrl: storageResult.url,
+                  durationSeconds: elapsedSeconds
+                }
+              });
+
+              await pipelineService.processMeetingRecording(meetingId, storageResult.fileKey);
+              return { message: 'Bot left call. Recorded audio downloaded and pipeline finished.' };
+            }
+          }
+        } catch (err) {
+          console.error(`[BotService] Attempt ${attempt} failed fetching media after leave_call:`, err);
+        }
+        await new Promise((r) => setTimeout(r, 2000));
+      }
     }
 
     await prisma.meeting.update({
@@ -260,7 +262,7 @@ export class BotService {
     const storageResult = await storageService.saveFile(sampleAudioBuffer, `live_meeting_${meetingId}.mp3`, 'audio/mp3');
     await pipelineService.processMeetingRecording(meetingId, storageResult.fileKey);
 
-    return { message: 'Bot left call. Processing meeting notes...' };
+    return { message: 'Bot left call. Finalized meeting processing.' };
   }
 
   /**
@@ -302,7 +304,6 @@ export class BotService {
 
         if (latestStatus === 'call_ended' || latestStatus === 'done' || latestStatus === 'fatal' || polls >= maxPolls) {
           clearInterval(interval);
-          activeBots.delete(meetingId);
 
           if (latestStatus === 'fatal') {
             await prisma.meeting.update({
