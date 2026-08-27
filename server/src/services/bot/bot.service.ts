@@ -48,12 +48,18 @@ export class BotService {
       }
     });
 
-    // 2. If RECALL_API_KEY is present, dispatch real bot via Recall.ai API
-    if (ENV.RECALL_API_KEY) {
-      this.dispatchRecallBot(meeting.id, req.meetingUrl, botName);
+    // 2. Dispatch bot in background (non-blocking so API endpoint never throws 500)
+    const apiKey = ENV.RECALL_API_KEY ? ENV.RECALL_API_KEY.trim() : '';
+
+    if (apiKey) {
+      this.dispatchRecallBot(meeting.id, req.meetingUrl, botName, apiKey).catch((err) => {
+        console.error(`[BotService] Background dispatch error:`, err);
+      });
     } else {
       // Fallback: Virtual Bot Lifecycle for zero-cost offline testing
-      this.runVirtualBotLifecycle(meeting.id, req.meetingUrl, platform, title);
+      this.runVirtualBotLifecycle(meeting.id, req.meetingUrl, platform, title).catch((err) => {
+        console.error(`[BotService] Virtual bot error:`, err);
+      });
     }
 
     return {
@@ -68,14 +74,17 @@ export class BotService {
   /**
    * Dispatch live meeting bot using Recall.ai API
    */
-  private async dispatchRecallBot(meetingId: string, meetingUrl: string, botName: string) {
+  private async dispatchRecallBot(meetingId: string, meetingUrl: string, botName: string, apiKey: string) {
     try {
-      console.log(`[BotService] Dispatching live Recall.ai bot to meeting URL: ${meetingUrl}...`);
+      console.log(`[BotService] Dispatching live Recall.ai bot to URL: ${meetingUrl}...`);
 
-      const response = await fetch('https://api.recall.ai/api/v1/bot', {
+      // Recall.ai API endpoints (supports standard and us-east-1 region)
+      const recallEndpoint = 'https://us-east-1.recall.ai/api/v1/bot';
+
+      const response = await fetch(recallEndpoint, {
         method: 'POST',
         headers: {
-          'Authorization': `Token ${ENV.RECALL_API_KEY}`,
+          'Authorization': `Token ${apiKey}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
@@ -84,10 +93,41 @@ export class BotService {
         })
       });
 
-      const data = await response.json();
-      console.log(`[BotService] Recall.ai bot response:`, data);
-    } catch (err) {
+      const responseText = await response.text();
+      let data: any = {};
+      try {
+        data = JSON.parse(responseText);
+      } catch {
+        data = { raw: responseText };
+      }
+
+      console.log(`[BotService] Recall.ai HTTP status: ${response.status}`, data);
+
+      if (!response.ok) {
+        const errorMsg = data.detail || data.error || data.message || `Recall.ai returned HTTP ${response.status}`;
+        console.error(`[BotService] Recall.ai API error (${response.status}):`, errorMsg);
+
+        // Update meeting status to FAILED with clear message
+        await prisma.meeting.update({
+          where: { id: meetingId },
+          data: {
+            status: 'FAILED',
+            errorMessage: `Recall.ai API Error (${response.status}): ${errorMsg}`
+          }
+        });
+        return;
+      }
+
+      console.log(`[BotService] Recall.ai bot successfully dispatched! Bot ID: ${data.id || 'N/A'}`);
+    } catch (err: any) {
       console.error(`[BotService] Failed to dispatch Recall.ai bot:`, err);
+      await prisma.meeting.update({
+        where: { id: meetingId },
+        data: {
+          status: 'FAILED',
+          errorMessage: `Recall.ai Connection Error: ${err.message || String(err)}`
+        }
+      });
     }
   }
 
@@ -124,7 +164,7 @@ export class BotService {
       // Stage 4: Hand over to processing pipeline (Transcription + Speaker Diarization + AI Notes)
       await pipelineService.processMeetingRecording(meetingId, storageResult.fileKey);
 
-    } catch (error) {
+    } catch (error: any) {
       console.error(`[BotService] Bot lifecycle failed for meeting ${meetingId}:`, error);
       await prisma.meeting.update({
         where: { id: meetingId },
