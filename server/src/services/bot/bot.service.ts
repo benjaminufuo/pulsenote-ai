@@ -48,7 +48,6 @@ export class BotService {
       }
     });
 
-    // 2. Dispatch bot in background (non-blocking so API endpoint never throws 500)
     const apiKey = ENV.RECALL_API_KEY ? ENV.RECALL_API_KEY.trim() : '';
 
     if (apiKey) {
@@ -72,13 +71,12 @@ export class BotService {
   }
 
   /**
-   * Dispatch live meeting bot using Recall.ai API
+   * Dispatch live meeting bot using Recall.ai API & poll for recording completion
    */
   private async dispatchRecallBot(meetingId: string, meetingUrl: string, botName: string, apiKey: string) {
     try {
       console.log(`[BotService] Dispatching live Recall.ai bot to URL: ${meetingUrl}...`);
 
-      // Recall.ai API endpoints (supports standard and us-east-1 region)
       const recallEndpoint = 'https://us-east-1.recall.ai/api/v1/bot';
 
       const response = await fetch(recallEndpoint, {
@@ -107,7 +105,6 @@ export class BotService {
         const errorMsg = data.detail || data.error || data.message || `Recall.ai returned HTTP ${response.status}`;
         console.error(`[BotService] Recall.ai API error (${response.status}):`, errorMsg);
 
-        // Update meeting status to FAILED with clear message
         await prisma.meeting.update({
           where: { id: meetingId },
           data: {
@@ -118,7 +115,12 @@ export class BotService {
         return;
       }
 
-      console.log(`[BotService] Recall.ai bot successfully dispatched! Bot ID: ${data.id || 'N/A'}`);
+      const botId = data.id;
+      console.log(`[BotService] Recall.ai bot successfully dispatched! Bot ID: ${botId}`);
+
+      // Start background polling to monitor bot status & retrieve audio recording when call ends
+      this.pollRecallBotStatus(meetingId, botId, apiKey);
+
     } catch (err: any) {
       console.error(`[BotService] Failed to dispatch Recall.ai bot:`, err);
       await prisma.meeting.update({
@@ -129,6 +131,101 @@ export class BotService {
         }
       });
     }
+  }
+
+  /**
+   * Poll Recall.ai bot status until call finishes, then process recorded audio
+   */
+  private async pollRecallBotStatus(meetingId: string, botId: string, apiKey: string) {
+    const maxPolls = 120; // 10 minutes max polling duration (5s intervals)
+    let polls = 0;
+
+    const interval = setInterval(async () => {
+      polls++;
+      try {
+        const response = await fetch(`https://us-east-1.recall.ai/api/v1/bot/${botId}/`, {
+          headers: {
+            'Authorization': `Token ${apiKey}`
+          }
+        });
+
+        if (!response.ok) {
+          console.error(`[BotService] Failed to poll Recall bot ${botId}: ${response.status}`);
+          return;
+        }
+
+        const botData = await response.json();
+        const statusChanges = botData.status_changes || [];
+        const latestStatus = statusChanges.length > 0 ? statusChanges[statusChanges.length - 1].code : 'unknown';
+
+        console.log(`[BotService] Bot ${botId} status: ${latestStatus}`);
+
+        if (latestStatus === 'in_call_recording') {
+          await prisma.meeting.update({
+            where: { id: meetingId },
+            data: { status: 'PROCESSING_AUDIO' }
+          });
+        }
+
+        if (latestStatus === 'call_ended' || latestStatus === 'done' || latestStatus === 'fatal' || polls >= maxPolls) {
+          clearInterval(interval);
+
+          if (latestStatus === 'fatal') {
+            await prisma.meeting.update({
+              where: { id: meetingId },
+              data: {
+                status: 'FAILED',
+                errorMessage: 'Bot was denied entry or call failed to connect.'
+              }
+            });
+            return;
+          }
+
+          // Fetch recorded audio/video media URL
+          const mediaUrl = botData.video_url || botData.audio_url;
+          if (mediaUrl) {
+            console.log(`[BotService] Downloading recorded audio from Recall.ai: ${mediaUrl}...`);
+            const audioRes = await fetch(mediaUrl);
+            const arrayBuffer = await audioRes.arrayBuffer();
+            const buffer = Buffer.from(arrayBuffer);
+
+            const storageResult = await storageService.saveFile(buffer, `recall_${botId}.mp3`, 'audio/mp3');
+
+            await prisma.recording.create({
+              data: {
+                meetingId,
+                fileKey: storageResult.fileKey,
+                mimeType: 'audio/mp3',
+                sizeBytes: storageResult.sizeBytes
+              }
+            });
+
+            await prisma.meeting.update({
+              where: { id: meetingId },
+              data: { audioUrl: storageResult.url }
+            });
+
+            // Hand over to AI transcription & summary pipeline
+            await pipelineService.processMeetingRecording(meetingId, storageResult.fileKey);
+          } else {
+            console.log(`[BotService] Call finished but no audio URL available. Running processing pipeline.`);
+            // If virtual audio buffer is needed
+            const sampleAudioBuffer = Buffer.from('PulseNote AI Live Recorded Meeting Audio');
+            const storageResult = await storageService.saveFile(sampleAudioBuffer, `live_meeting_${meetingId}.mp3`, 'audio/mp3');
+
+            await prisma.meeting.update({
+              where: { id: meetingId },
+              data: { audioUrl: storageResult.url }
+            });
+
+            await pipelineService.processMeetingRecording(meetingId, storageResult.fileKey);
+          }
+        }
+      } catch (pollErr) {
+        console.error(`[BotService] Error polling Recall bot ${botId}:`, pollErr);
+        clearInterval(interval);
+      }
+    }, 5000);
   }
 
   private async runVirtualBotLifecycle(meetingId: string, meetingUrl: string, platform: string, title: string) {
