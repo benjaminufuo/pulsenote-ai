@@ -5,7 +5,7 @@ import { AudioPlayer } from '../components/meeting/AudioPlayer';
 import { TranscriptViewer } from '../components/meeting/TranscriptViewer';
 import { AINotesView } from '../components/meeting/AINotesView';
 import { ProcessingProgress } from '../components/meeting/ProcessingProgress';
-import { ArrowLeft, Trash2, Calendar, Clock, Users, Share2 } from 'lucide-react';
+import { ArrowLeft, Trash2, Calendar, Clock, Users, Share2, AlertTriangle, RefreshCw } from 'lucide-react';
 import './MeetingDetailPage.css';
 
 export const MeetingDetailPage: React.FC = () => {
@@ -67,7 +67,33 @@ export const MeetingDetailPage: React.FC = () => {
     );
   }
 
-  const isProcessing = meeting.status !== 'COMPLETED' && meeting.status !== 'FAILED';
+  // Handle Failed State with Clear User Diagnostic Banner
+  if (meeting.status === 'FAILED') {
+    return (
+      <div className="page-container-narrow">
+        <button onClick={() => navigate('/meetings')} className="btn btn-outline" style={{ marginBottom: '1rem' }}>
+          <ArrowLeft size={16} /> Back to Meetings
+        </button>
+        <div className="card recorder-card" style={{ borderColor: '#EF4444' }}>
+          <AlertTriangle size={48} color="#EF4444" />
+          <h3 className="recorder-title" style={{ color: '#EF4444' }}>Bot Invite / Processing Failed</h3>
+          <p className="recorder-subtitle" style={{ color: 'var(--text-main)', background: 'var(--bg-subtle)', padding: '1rem', borderRadius: 'var(--radius-md)', margin: '1rem 0' }}>
+            {meeting.errorMessage || 'The bot was unable to enter the live meeting URL or process audio.'}
+          </p>
+          <div className="speaker-label-row" style={{ gap: '0.75rem', justifyContent: 'center' }}>
+            <button onClick={() => navigate('/invite-bot')} className="btn btn-primary">
+              <RefreshCw size={16} /> Try Inviting Again
+            </button>
+            <button onClick={handleDeleteMeeting} className="btn btn-outline" style={{ color: '#EF4444', borderColor: '#EF4444' }}>
+              <Trash2 size={16} /> Remove Meeting
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const isProcessing = meeting.status !== 'COMPLETED';
 
   if (isProcessing) {
     return (
