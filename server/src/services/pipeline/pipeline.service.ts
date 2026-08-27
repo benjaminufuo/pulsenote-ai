@@ -35,7 +35,7 @@ export class PipelineService {
 
       // Stage 1: PROCESSING_AUDIO
       await this.updateStatus(meetingId, 'PROCESSING_AUDIO');
-      await new Promise((r) => setTimeout(r, 1000));
+      await new Promise((r) => setTimeout(r, 800));
 
       // Stage 2: TRANSCRIBING
       await this.updateStatus(meetingId, 'TRANSCRIBING');
@@ -44,58 +44,101 @@ export class PipelineService {
 
       // Stage 3: IDENTIFYING_SPEAKERS
       await this.updateStatus(meetingId, 'IDENTIFYING_SPEAKERS');
-      await new Promise((r) => setTimeout(r, 800));
+      await new Promise((r) => setTimeout(r, 600));
 
-      // Save Transcript & Segments to DB
-      const transcript = await prisma.transcript.create({
-        data: {
-          meetingId,
-          fullText: transcriptionResult.fullText,
-          language: transcriptionResult.language,
-          segments: {
-            create: transcriptionResult.segments.map((seg) => ({
-              speakerLabel: seg.speakerLabel,
-              speakerName: seg.speakerName,
-              startTime: seg.startTime,
-              endTime: seg.endTime,
-              text: seg.text
-            }))
+      // Upsert Transcript & Segments to DB cleanly without unique constraint failures
+      let transcript = await prisma.transcript.findUnique({ where: { meetingId } });
+
+      if (transcript) {
+        await prisma.transcriptSegment.deleteMany({ where: { transcriptId: transcript.id } });
+        await prisma.transcript.update({
+          where: { id: transcript.id },
+          data: {
+            fullText: transcriptionResult.fullText || transcript.fullText,
+            language: transcriptionResult.language,
+            segments: {
+              create: transcriptionResult.segments.map((seg) => ({
+                speakerLabel: seg.speakerLabel,
+                speakerName: seg.speakerName,
+                startTime: seg.startTime,
+                endTime: seg.endTime,
+                text: seg.text
+              }))
+            }
           }
-        }
-      });
+        });
+      } else {
+        transcript = await prisma.transcript.create({
+          data: {
+            meetingId,
+            fullText: transcriptionResult.fullText,
+            language: transcriptionResult.language,
+            segments: {
+              create: transcriptionResult.segments.map((seg) => ({
+                speakerLabel: seg.speakerLabel,
+                speakerName: seg.speakerName,
+                startTime: seg.startTime,
+                endTime: seg.endTime,
+                text: seg.text
+              }))
+            }
+          }
+        });
+      }
 
-      // Populate Meeting Participants
+      // Populate Meeting Participants safely without duplicates
       const uniqueSpeakers = Array.from(
         new Set(transcriptionResult.segments.map((s) => JSON.stringify({ label: s.speakerLabel, name: s.speakerName })))
       ).map((str) => JSON.parse(str));
 
       for (const sp of uniqueSpeakers) {
-        await prisma.meetingParticipant.create({
-          data: {
-            meetingId,
-            name: sp.name,
-            speakerLabel: sp.label
-          }
+        const existingParticipant = await prisma.meetingParticipant.findFirst({
+          where: { meetingId, name: sp.name }
         });
+        if (!existingParticipant) {
+          await prisma.meetingParticipant.create({
+            data: {
+              meetingId,
+              name: sp.name,
+              speakerLabel: sp.label
+            }
+          });
+        }
       }
 
       // Stage 4: GENERATING_SUMMARY
       await this.updateStatus(meetingId, 'GENERATING_SUMMARY');
-      const aiNotes = await aiService.generateMeetingNotes(transcriptionResult.fullText, meeting.title);
+      const aiNotes = await aiService.generateMeetingNotes(transcriptionResult.fullText || transcript.fullText, meeting.title);
 
-      await prisma.meetingSummary.create({
-        data: {
-          meetingId,
-          overview: aiNotes.overview,
-          keyPoints: JSON.stringify(aiNotes.keyPoints),
-          decisions: JSON.stringify(aiNotes.decisions),
-          questions: JSON.stringify(aiNotes.questions),
-          topics: JSON.stringify(aiNotes.topics)
-        }
-      });
+      const existingSummary = await prisma.meetingSummary.findUnique({ where: { meetingId } });
+      if (existingSummary) {
+        await prisma.meetingSummary.update({
+          where: { id: existingSummary.id },
+          data: {
+            overview: aiNotes.overview,
+            keyPoints: JSON.stringify(aiNotes.keyPoints),
+            decisions: JSON.stringify(aiNotes.decisions),
+            questions: JSON.stringify(aiNotes.questions),
+            topics: JSON.stringify(aiNotes.topics)
+          }
+        });
+      } else {
+        await prisma.meetingSummary.create({
+          data: {
+            meetingId,
+            overview: aiNotes.overview,
+            keyPoints: JSON.stringify(aiNotes.keyPoints),
+            decisions: JSON.stringify(aiNotes.decisions),
+            questions: JSON.stringify(aiNotes.questions),
+            topics: JSON.stringify(aiNotes.topics)
+          }
+        });
+      }
 
       // Stage 5: GENERATING_ACTION_ITEMS
       await this.updateStatus(meetingId, 'GENERATING_ACTION_ITEMS');
+      await prisma.actionItem.deleteMany({ where: { meetingId, completed: false } });
+
       for (const item of aiNotes.actionItems) {
         await prisma.actionItem.create({
           data: {
@@ -112,7 +155,7 @@ export class PipelineService {
         where: { id: meetingId },
         data: {
           status: 'COMPLETED',
-          durationSeconds: transcriptionResult.durationSeconds
+          durationSeconds: transcriptionResult.durationSeconds || meeting.durationSeconds
         }
       });
 

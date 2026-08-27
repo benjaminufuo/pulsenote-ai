@@ -21,6 +21,21 @@ export const MeetingDetailPage: React.FC = () => {
     if (meetingId) {
       fetchMeetingDetail();
     }
+
+    // Poll meeting detail every 3.5 seconds while viewing active call to stream live transcript segments
+    const pollInterval = setInterval(() => {
+      if (meetingId) {
+        api.get(`/meetings/${meetingId}`).then((res) => {
+          setMeeting((prev: any) => {
+            // Keep active playing state stable
+            if (!prev) return res.data;
+            return { ...res.data };
+          });
+        }).catch(() => {});
+      }
+    }, 3500);
+
+    return () => clearInterval(pollInterval);
   }, [meetingId]);
 
   const fetchMeetingDetail = async () => {
@@ -144,7 +159,7 @@ export const MeetingDetailPage: React.FC = () => {
               </span>
               {isProcessing && (
                 <span className="badge badge-processing" style={{ background: '#EF4444', color: '#FFF', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <Radio size={12} className="recording-pulse" /> LIVE STREAMING
+                  <Radio size={12} className="recording-pulse" /> LIVE REAL-TIME TRANSCRIPT
                 </span>
               )}
             </div>
