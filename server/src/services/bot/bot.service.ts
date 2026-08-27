@@ -32,10 +32,10 @@ export class BotService {
     const title = req.title || `${platform} Meeting - ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
     const botName = req.botName || 'PulseNote AI Notetaker';
 
-    // 1. Clean meeting URL (remove trailing query params like ?authuser=0)
+    // Clean meeting URL (remove trailing query params like ?authuser=0)
     const cleanUrl = req.meetingUrl.split('?')[0].trim();
 
-    // 2. Create Meeting in DB
+    // 1. Create Meeting in DB
     const meeting = await prisma.meeting.create({
       data: {
         workspaceId: req.workspaceId,
@@ -75,14 +75,24 @@ export class BotService {
 
   /**
    * Dispatch live meeting bot using Recall.ai API & poll for recording completion.
-   * Tries multiple region endpoints (us-west-2, us-east-1, api.recall.ai) for compatibility.
+   * Auto-detects region (us-east-1, us-west-2, eu-central-1, ap-northeast-1).
    */
   private async dispatchRecallBot(meetingId: string, meetingUrl: string, botName: string, apiKey: string) {
-    const endpoints = [
-      'https://us-west-2.recall.ai/api/v1/bot',
+    const userRegion = ENV.RECALL_REGION ? ENV.RECALL_REGION.trim().toLowerCase() : '';
+
+    const defaultEndpoints = [
       'https://us-east-1.recall.ai/api/v1/bot',
+      'https://us-west-2.recall.ai/api/v1/bot',
+      'https://eu-central-1.recall.ai/api/v1/bot',
+      'https://ap-northeast-1.recall.ai/api/v1/bot',
       'https://api.recall.ai/api/v1/bot'
     ];
+
+    let endpoints = [...defaultEndpoints];
+    if (userRegion) {
+      const regionUrl = `https://${userRegion}.recall.ai/api/v1/bot`;
+      endpoints = [regionUrl, ...defaultEndpoints.filter((e) => e !== regionUrl)];
+    }
 
     let lastError = '';
     let dispatchedBotData: any = null;
@@ -132,7 +142,7 @@ export class BotService {
         where: { id: meetingId },
         data: {
           status: 'FAILED',
-          errorMessage: `Recall.ai API Key or URL Error: ${lastError}`
+          errorMessage: `Recall.ai API Key Error: ${lastError}`
         }
       });
       return;
