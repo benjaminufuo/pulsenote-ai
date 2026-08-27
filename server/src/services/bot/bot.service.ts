@@ -106,7 +106,7 @@ export class BotService {
         console.log(`[BotService] Attempting Recall.ai dispatch via ${endpoint} for URL: ${meetingUrl}...`);
 
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 4000); // 4s fast timeout per region
+        const timeoutId = setTimeout(() => controller.abort(), 4000);
 
         const response = await fetch(endpoint, {
           method: 'POST',
@@ -160,15 +160,15 @@ export class BotService {
     const botId = dispatchedBotData.id;
     console.log(`[BotService] Recall.ai bot successfully dispatched! Bot ID: ${botId} on ${successfulEndpoint}`);
 
-    // Start background polling to monitor bot status & retrieve audio recording when call ends
+    // Start background polling to monitor bot status & retrieve real-time transcripts & recorded audio
     this.pollRecallBotStatus(meetingId, botId, apiKey, successfulEndpoint);
   }
 
   /**
-   * Poll Recall.ai bot status until call finishes, then process recorded audio
+   * Poll Recall.ai bot status and fetch real-time transcripts while call is ongoing
    */
   private async pollRecallBotStatus(meetingId: string, botId: string, apiKey: string, baseUrl: string) {
-    const maxPolls = 180; // 15 minutes max polling duration (5s intervals)
+    const maxPolls = 240; // 20 minutes max polling duration (5s intervals)
     let polls = 0;
 
     const interval = setInterval(async () => {
@@ -196,6 +196,9 @@ export class BotService {
             where: { id: meetingId },
             data: { status: 'PROCESSING_AUDIO' }
           });
+
+          // Fetch Real-time Live Transcripts from Recall.ai
+          this.fetchAndSyncRealtimeTranscript(meetingId, botId, apiKey, baseUrl);
         }
 
         if (latestStatus === 'call_ended' || latestStatus === 'done' || latestStatus === 'fatal' || polls >= maxPolls) {
@@ -255,7 +258,94 @@ export class BotService {
         console.error(`[BotService] Error polling Recall bot ${botId}:`, pollErr);
         clearInterval(interval);
       }
-    }, 5000);
+    }, 4000);
+  }
+
+  /**
+   * Fetch live transcript from Recall.ai and update Prisma database in real-time
+   */
+  private async fetchAndSyncRealtimeTranscript(meetingId: string, botId: string, apiKey: string, baseUrl: string) {
+    try {
+      const res = await fetch(`${baseUrl}/bot/${botId}/transcript/`, {
+        headers: { 'Authorization': `Token ${apiKey}` }
+      });
+
+      if (!res.ok) return;
+
+      const rawTranscript: any[] = await res.json();
+      if (!Array.isArray(rawTranscript) || rawTranscript.length === 0) return;
+
+      let transcript = await prisma.transcript.findUnique({ where: { meetingId } });
+      if (!transcript) {
+        transcript = await prisma.transcript.create({
+          data: {
+            meetingId,
+            fullText: '',
+            language: 'en'
+          }
+        });
+      }
+
+      // Format live segments with Google Meet speaker names
+      const segments: Array<{ speakerLabel: string; speakerName: string; startTime: number; endTime: number; text: string }> = [];
+
+      rawTranscript.forEach((block: any, idx: number) => {
+        const speakerName = block.speaker || block.speaker_name || `Speaker ${(idx % 3) + 1}`;
+        const words = block.words || [];
+        const text = words.map((w: any) => w.text).join(' ') || block.text || '';
+        const startTime = words.length > 0 ? (words[0].start_time || 0) : 0;
+        const endTime = words.length > 0 ? (words[words.length - 1].end_time || startTime + 3) : startTime + 3;
+
+        if (text.trim()) {
+          segments.push({
+            speakerLabel: `Speaker ${idx + 1}`,
+            speakerName: speakerName.trim(),
+            startTime: Math.round(startTime * 10) / 10,
+            endTime: Math.round(endTime * 10) / 10,
+            text: text.trim()
+          });
+        }
+      });
+
+      if (segments.length === 0) return;
+
+      // Delete previous temporary live segments and insert updated live stream segments
+      await prisma.transcriptSegment.deleteMany({ where: { transcriptId: transcript.id } });
+
+      await prisma.transcriptSegment.createMany({
+        data: segments.map((s) => ({
+          transcriptId: transcript!.id,
+          speakerLabel: s.speakerLabel,
+          speakerName: s.speakerName,
+          startTime: s.startTime,
+          endTime: s.endTime,
+          text: s.text
+        }))
+      });
+
+      const fullText = segments.map((s) => `${s.speakerName}: ${s.text}`).join('\n\n');
+      await prisma.transcript.update({
+        where: { id: transcript.id },
+        data: { fullText }
+      });
+
+      // Update Meeting Participants
+      const uniqueNames = Array.from(new Set(segments.map((s) => s.speakerName)));
+      for (const name of uniqueNames) {
+        const existing = await prisma.meetingParticipant.findFirst({
+          where: { meetingId, name }
+        });
+        if (!existing) {
+          await prisma.meetingParticipant.create({
+            data: { meetingId, name, speakerLabel: name }
+          });
+        }
+      }
+
+      console.log(`[BotService] Synced ${segments.length} live transcript segments for meeting ${meetingId}`);
+    } catch (err) {
+      console.error(`[BotService] Live transcript sync error:`, err);
+    }
   }
 
   private async runVirtualBotLifecycle(meetingId: string, meetingUrl: string, platform: string, title: string) {

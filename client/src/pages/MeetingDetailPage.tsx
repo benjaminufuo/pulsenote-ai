@@ -5,7 +5,7 @@ import { AudioPlayer } from '../components/meeting/AudioPlayer';
 import { TranscriptViewer } from '../components/meeting/TranscriptViewer';
 import { AINotesView } from '../components/meeting/AINotesView';
 import { ProcessingProgress } from '../components/meeting/ProcessingProgress';
-import { ArrowLeft, Trash2, Calendar, Clock, Users, Share2, AlertTriangle, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Trash2, Calendar, Clock, Users, Share2, AlertTriangle, RefreshCw, Radio } from 'lucide-react';
 import './MeetingDetailPage.css';
 
 export const MeetingDetailPage: React.FC = () => {
@@ -95,21 +95,6 @@ export const MeetingDetailPage: React.FC = () => {
 
   const isProcessing = meeting.status !== 'COMPLETED';
 
-  if (isProcessing) {
-    return (
-      <div className="page-container-narrow">
-        <button onClick={() => navigate('/meetings')} className="btn btn-outline" style={{ marginBottom: '1rem' }}>
-          <ArrowLeft size={16} /> Back to Meetings
-        </button>
-        <ProcessingProgress
-          meetingId={meeting.id}
-          currentStatus={meeting.status}
-          onCompleted={fetchMeetingDetail}
-        />
-      </div>
-    );
-  }
-
   return (
     <div className="page-container">
       {/* Top Navigation & Actions Bar */}
@@ -138,18 +123,36 @@ export const MeetingDetailPage: React.FC = () => {
         </div>
       </div>
 
+      {/* Live Active Status Header when Call is Ongoing */}
+      {isProcessing && (
+        <div style={{ marginBottom: '1.5rem' }}>
+          <ProcessingProgress
+            meetingId={meeting.id}
+            currentStatus={meeting.status}
+            onCompleted={fetchMeetingDetail}
+          />
+        </div>
+      )}
+
       {/* Header Title Card */}
       <div className="card" style={{ padding: '1.5rem' }}>
         <div className="kpi-card-header" style={{ marginBottom: '0.75rem' }}>
           <div>
-            <span className="badge badge-completed" style={{ marginBottom: '8px' }}>
-              {meeting.meetingType}
-            </span>
+            <div className="speaker-label-row" style={{ gap: '0.5rem', marginBottom: '8px' }}>
+              <span className={`badge ${meeting.status === 'COMPLETED' ? 'badge-completed' : 'badge-processing'}`}>
+                {meeting.meetingType}
+              </span>
+              {isProcessing && (
+                <span className="badge badge-processing" style={{ background: '#EF4444', color: '#FFF', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <Radio size={12} className="recording-pulse" /> LIVE STREAMING
+                </span>
+              )}
+            </div>
             <h1 className="recorder-title" style={{ textAlign: 'left' }}>{meeting.title}</h1>
           </div>
         </div>
 
-        <div className="speaker-label-row" style={{ gap: '1.5rem', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+        <div className="speaker-label-row" style={{ gap: '1.5rem', fontSize: '0.85rem', color: 'var(--text-muted)', flexWrap: 'wrap' }}>
           <span className="speaker-label-row">
             <Calendar size={15} /> {new Date(meeting.date).toLocaleDateString()}
           </span>
