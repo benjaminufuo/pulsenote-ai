@@ -9,5 +9,7 @@ export const ENV = {
   UPLOADS_DIR: path.join(__dirname, '../../uploads'),
   GEMINI_API_KEY: process.env.GEMINI_API_KEY || '',
   OPENAI_API_KEY: process.env.OPENAI_API_KEY || '',
+  MEETING_BAAS_API_KEY: process.env.MEETING_BAAS_API_KEY || '',
+  RECALL_API_KEY: process.env.RECALL_API_KEY || '',
   NODE_ENV: process.env.NODE_ENV || 'development'
 };

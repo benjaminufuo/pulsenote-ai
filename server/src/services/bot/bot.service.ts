@@ -1,6 +1,7 @@
 import { prisma } from '../../db/prisma';
 import { pipelineService } from '../pipeline/pipeline.service';
 import { storageService } from '../storage/storage.service';
+import { ENV } from '../../config/env';
 import puppeteer, { Browser } from 'puppeteer';
 
 export interface BotInviteRequest {
@@ -13,6 +14,8 @@ export interface BotInviteRequest {
 
 // Active Puppeteer browser instances stored in-memory
 const activeBrowsers: Map<string, Browser> = new Map();
+// Active Meeting Baas bot IDs stored in-memory
+const activeBaasBots: Map<string, string> = new Map();
 
 export class BotService {
   /**
@@ -28,7 +31,8 @@ export class BotService {
   }
 
   /**
-   * Dispatch PulseNote AI Puppeteer bot to join a meeting URL, drop chat message, and record audio.
+   * Dispatch PulseNote AI bot to join a meeting URL, drop chat message, and record audio.
+   * Auto-selects between Meeting Baas API, Recall.ai API, or Stealth Puppeteer Chrome Bot.
    */
   public async inviteBotToMeeting(req: BotInviteRequest) {
     const platform = this.detectPlatform(req.meetingUrl);
@@ -54,7 +58,7 @@ export class BotService {
 
     const announcementMessage = `🤖 PulseNote AI Notetaker has joined this meeting. I will be recording the discussion and generating automated meeting notes, transcripts, and executive summaries.`;
 
-    console.log(`[BotService] Dispatching Native Puppeteer Chrome Bot (${botName}) to ${platform}: ${cleanUrl}`);
+    console.log(`[BotService] PulseNote AI Notetaker (${botName}) active for ${platform}: ${cleanUrl}`);
 
     // Create in-app notification
     await prisma.notification.create({
@@ -67,11 +71,23 @@ export class BotService {
       }
     });
 
-    // Launch Headless Chromium Bot in background
+    const baasKey = ENV.MEETING_BAAS_API_KEY ? ENV.MEETING_BAAS_API_KEY.trim() : '';
+    const recallKey = ENV.RECALL_API_KEY ? ENV.RECALL_API_KEY.trim() : '';
+
     setImmediate(() => {
-      this.dispatchNativePuppeteerBot(meeting.id, cleanUrl, botName, announcementMessage).catch((err) => {
-        console.error(`[BotService] Puppeteer bot background error:`, err);
-      });
+      if (baasKey) {
+        this.dispatchMeetingBaasBot(meeting.id, cleanUrl, botName, announcementMessage, baasKey).catch((err) => {
+          console.error(`[BotService] Meeting Baas error:`, err);
+        });
+      } else if (recallKey) {
+        this.dispatchRecallBot(meeting.id, cleanUrl, botName, announcementMessage, recallKey).catch((err) => {
+          console.error(`[BotService] Recall error:`, err);
+        });
+      } else {
+        this.dispatchNativePuppeteerBot(meeting.id, cleanUrl, botName, announcementMessage).catch((err) => {
+          console.error(`[BotService] Puppeteer bot error:`, err);
+        });
+      }
     });
 
     return {
@@ -85,11 +101,73 @@ export class BotService {
   }
 
   /**
-   * Launch Stealth Chromium Browser using Puppeteer, enter Google Meet lobby, click Join, and post chat message.
+   * Meeting Baas API Bot Engine (Bypasses Google Meet Data-Center IP Blocks)
+   */
+  private async dispatchMeetingBaasBot(meetingId: string, meetingUrl: string, botName: string, announcement: string, apiKey: string) {
+    try {
+      console.log(`[BotService] Dispatching Meeting Baas Bot to Google Meet: ${meetingUrl}...`);
+
+      const res = await fetch('https://api.meetingbaas.com/bots', {
+        method: 'POST',
+        headers: {
+          'x-api-key': apiKey,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          meeting_url: meetingUrl,
+          bot_name: botName,
+          entry_message: announcement,
+          reserved: false
+        })
+      });
+
+      const data: any = await res.json();
+      console.log(`[BotService] Meeting Baas API response:`, data);
+
+      if (data.bot_id) {
+        activeBaasBots.set(meetingId, data.bot_id);
+        await prisma.meeting.update({
+          where: { id: meetingId },
+          data: { status: 'PROCESSING_AUDIO' }
+        });
+      }
+    } catch (err: any) {
+      console.error(`[BotService] Meeting Baas dispatch error:`, err);
+    }
+  }
+
+  /**
+   * Recall.ai API Bot Engine
+   */
+  private async dispatchRecallBot(meetingId: string, meetingUrl: string, botName: string, announcement: string, apiKey: string) {
+    try {
+      console.log(`[BotService] Dispatching Recall.ai Bot to Google Meet: ${meetingUrl}...`);
+
+      const res = await fetch('https://us-east-1.recall.ai/api/v1/bot', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Token ${apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          meeting_url: meetingUrl,
+          bot_name: botName
+        })
+      });
+
+      const data: any = await res.json();
+      console.log(`[BotService] Recall.ai API response:`, data);
+    } catch (err: any) {
+      console.error(`[BotService] Recall.ai dispatch error:`, err);
+    }
+  }
+
+  /**
+   * Native Stealth Chromium Browser using Puppeteer
    */
   private async dispatchNativePuppeteerBot(meetingId: string, meetingUrl: string, botName: string, announcement: string) {
     try {
-      console.log(`[BotService] Launching Stealth Chromium for meeting ${meetingId}...`);
+      console.log(`[BotService] Launching Native Puppeteer Chrome Bot for meeting ${meetingId}...`);
 
       const browser = await puppeteer.launch({
         headless: true,
@@ -113,27 +191,23 @@ export class BotService {
       const page = await browser.newPage();
       await page.setViewport({ width: 1280, height: 720 });
 
-      // Grant audio & video permissions to meet.google.com
       const context = browser.defaultBrowserContext();
       await context.overridePermissions('https://meet.google.com', ['microphone', 'camera', 'notifications']);
 
       console.log(`[BotService] Bot navigating to Google Meet URL: ${meetingUrl}...`);
       await page.goto(meetingUrl, { waitUntil: 'domcontentloaded', timeout: 45000 });
 
-      // Wait 3 seconds for Google Meet lobby elements to render
       await new Promise((r) => setTimeout(r, 3000));
 
-      // Mute Microphone & Camera via Keyboard Shortcuts (Ctrl+D / Ctrl+E)
       try {
         await page.keyboard.down('Control');
         await page.keyboard.press('d');
         await page.keyboard.press('e');
         await page.keyboard.up('Control');
-      } catch (keyErr) {
-        console.log(`[BotService] Keyboard mute shortcut attempt completed.`);
+      } catch {
+        // shortcut completed
       }
 
-      // Enter Bot Display Name into name input box
       await new Promise((r) => setTimeout(r, 2000));
 
       const inputSelectors = [
@@ -143,32 +217,22 @@ export class BotService {
         'input'
       ];
 
-      let typedName = false;
       for (const selector of inputSelectors) {
         try {
           const inputEl = await page.$(selector);
           if (inputEl) {
             await inputEl.click({ clickCount: 3 });
             await inputEl.type(botName, { delay: 40 });
-            console.log(`[BotService] Typed bot name "${botName}" into selector: ${selector}`);
-            typedName = true;
+            console.log(`[BotService] Typed bot name "${botName}" into ${selector}`);
             break;
           }
         } catch {
-          // try next selector
+          // next selector
         }
       }
 
-      if (!typedName) {
-        console.log(`[BotService] Name input field not found or already logged in.`);
-      }
-
-      // Click "Ask to join" or "Join now" button in Google Meet lobby
       await new Promise((r) => setTimeout(r, 1500));
 
-      let clickedJoin = false;
-
-      // 1. Try explicit button text matching
       const elements = await page.$$('button, div[role="button"], span[role="button"]');
       for (const el of elements) {
         try {
@@ -177,7 +241,6 @@ export class BotService {
           if (cleanText.includes('ask to join') || cleanText.includes('join now') || cleanText === 'join') {
             console.log(`[BotService] Bot clicking join element with text: "${text.trim()}"`);
             await el.click();
-            clickedJoin = true;
             break;
           }
         } catch {
@@ -185,41 +248,8 @@ export class BotService {
         }
       }
 
-      // 2. Try selector fallback if text match didn't fire
-      if (!clickedJoin) {
-        const joinSelectors = [
-          'button[jsname="QboAqd"]',
-          'div[jsname="QboAqd"]',
-          '[aria-label*="Ask to join" i]',
-          '[aria-label*="Join now" i]',
-          '[aria-label*="Join" i]'
-        ];
-
-        for (const selector of joinSelectors) {
-          try {
-            const joinBtn = await page.$(selector);
-            if (joinBtn) {
-              await joinBtn.click();
-              console.log(`[BotService] Bot clicked join selector: ${selector}`);
-              clickedJoin = true;
-              break;
-            }
-          } catch {
-            // try next
-          }
-        }
-      }
-
-      if (clickedJoin) {
-        console.log(`[BotService] PulseNote AI Bot successfully requested entry into Google Meet room!`);
-      } else {
-        console.log(`[BotService] Join button not found; bot may already be in meeting room.`);
-      }
-
-      // Wait 5 seconds for host admission into Google Meet room
       await new Promise((r) => setTimeout(r, 5000));
 
-      // Open Google Meet Chat and post announcement message
       try {
         const chatSelectors = [
           '[aria-label*="Chat with everyone" i]',
@@ -241,21 +271,12 @@ export class BotService {
             break;
           }
         }
-      } catch (chatErr) {
-        console.log(`[BotService] In-meeting chat post attempt finished.`);
+      } catch {
+        console.log(`[BotService] Chat post attempt finished.`);
       }
-
-      await prisma.meeting.update({
-        where: { id: meetingId },
-        data: { status: 'PROCESSING_AUDIO' }
-      });
 
     } catch (err: any) {
       console.error(`[BotService] Native Puppeteer bot error:`, err?.message || err);
-      await prisma.meeting.update({
-        where: { id: meetingId },
-        data: { status: 'PROCESSING_AUDIO' }
-      });
     }
   }
 
@@ -267,6 +288,22 @@ export class BotService {
     const meeting = await prisma.meeting.findUnique({ where: { id: meetingId } });
     if (!meeting) {
       return { message: 'Meeting not found.' };
+    }
+
+    const baasKey = ENV.MEETING_BAAS_API_KEY ? ENV.MEETING_BAAS_API_KEY.trim() : '';
+    const baasBotId = activeBaasBots.get(meetingId);
+
+    if (baasBotId && baasKey) {
+      console.log(`[BotService] Commanding Meeting Baas bot ${baasBotId} to leave call...`);
+      try {
+        await fetch(`https://api.meetingbaas.com/bots/${baasBotId}`, {
+          method: 'DELETE',
+          headers: { 'x-api-key': baasKey }
+        });
+      } catch (err) {
+        console.error(`[BotService] Error leaving Meeting Baas bot:`, err);
+      }
+      activeBaasBots.delete(meetingId);
     }
 
     const browser = activeBrowsers.get(meetingId);
