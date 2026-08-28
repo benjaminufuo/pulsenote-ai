@@ -85,21 +85,25 @@ export class BotService {
   }
 
   /**
-   * Launch Headless Chromium Browser using Puppeteer, enter Google Meet lobby, click Join, and post chat message.
+   * Launch Stealth Chromium Browser using Puppeteer, enter Google Meet lobby, click Join, and post chat message.
    */
   private async dispatchNativePuppeteerBot(meetingId: string, meetingUrl: string, botName: string, announcement: string) {
     try {
-      console.log(`[BotService] Launching Headless Chromium for meeting ${meetingId}...`);
+      console.log(`[BotService] Launching Stealth Chromium for meeting ${meetingId}...`);
 
       const browser = await puppeteer.launch({
         headless: true,
         args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',
+          '--disable-accelerated-2d-canvas',
+          '--disable-gpu',
+          '--window-size=1280,720',
           '--use-fake-ui-for-media-stream',
           '--use-fake-device-for-media-stream',
           '--allow-file-access-from-files',
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-blink-features=AutomationControlled',
+          '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
           '--autoplay-policy=no-user-gesture-required'
         ]
       });
@@ -114,48 +118,127 @@ export class BotService {
       await context.overridePermissions('https://meet.google.com', ['microphone', 'camera', 'notifications']);
 
       console.log(`[BotService] Bot navigating to Google Meet URL: ${meetingUrl}...`);
-      await page.goto(meetingUrl, { waitUntil: 'networkidle2', timeout: 35000 });
+      await page.goto(meetingUrl, { waitUntil: 'domcontentloaded', timeout: 45000 });
 
-      // Mute Microphone & Camera in Google Meet Lobby (Ctrl+D / Ctrl+E)
-      await new Promise((r) => setTimeout(r, 2500));
-      await page.keyboard.down('Control');
-      await page.keyboard.press('d');
-      await page.keyboard.press('e');
-      await page.keyboard.up('Control');
+      // Wait 3 seconds for Google Meet lobby elements to render
+      await new Promise((r) => setTimeout(r, 3000));
 
-      // Enter Bot Display Name into input field if prompted
-      await new Promise((r) => setTimeout(r, 1500));
-      const nameInput = await page.$('input[type="text"]');
-      if (nameInput) {
-        await nameInput.type(botName, { delay: 40 });
+      // Mute Microphone & Camera via Keyboard Shortcuts (Ctrl+D / Ctrl+E)
+      try {
+        await page.keyboard.down('Control');
+        await page.keyboard.press('d');
+        await page.keyboard.press('e');
+        await page.keyboard.up('Control');
+      } catch (keyErr) {
+        console.log(`[BotService] Keyboard mute shortcut attempt completed.`);
       }
 
-      // Click "Ask to join" or "Join now" button in Google Meet lobby
-      await new Promise((r) => setTimeout(r, 1000));
-      const buttons = await page.$$('button');
-      for (const btn of buttons) {
-        const text = await page.evaluate((el) => el.textContent || '', btn);
-        if (text.includes('Ask to join') || text.includes('Join now') || text.includes('Join')) {
-          console.log(`[BotService] Bot clicking join button: "${text.trim()}"`);
-          await btn.click();
-          break;
+      // Enter Bot Display Name into name input box
+      await new Promise((r) => setTimeout(r, 2000));
+
+      const inputSelectors = [
+        'input[aria-label*="name" i]',
+        'input[placeholder*="name" i]',
+        'input[type="text"]',
+        'input'
+      ];
+
+      let typedName = false;
+      for (const selector of inputSelectors) {
+        try {
+          const inputEl = await page.$(selector);
+          if (inputEl) {
+            await inputEl.click({ clickCount: 3 });
+            await inputEl.type(botName, { delay: 40 });
+            console.log(`[BotService] Typed bot name "${botName}" into selector: ${selector}`);
+            typedName = true;
+            break;
+          }
+        } catch {
+          // try next selector
         }
       }
 
-      // Wait for host admission into Google Meet call
-      await new Promise((r) => setTimeout(r, 4000));
+      if (!typedName) {
+        console.log(`[BotService] Name input field not found or already logged in.`);
+      }
+
+      // Click "Ask to join" or "Join now" button in Google Meet lobby
+      await new Promise((r) => setTimeout(r, 1500));
+
+      let clickedJoin = false;
+
+      // 1. Try explicit button text matching
+      const elements = await page.$$('button, div[role="button"], span[role="button"]');
+      for (const el of elements) {
+        try {
+          const text = await page.evaluate((node) => node.textContent || '', el);
+          const cleanText = text.trim().toLowerCase();
+          if (cleanText.includes('ask to join') || cleanText.includes('join now') || cleanText === 'join') {
+            console.log(`[BotService] Bot clicking join element with text: "${text.trim()}"`);
+            await el.click();
+            clickedJoin = true;
+            break;
+          }
+        } catch {
+          // continue
+        }
+      }
+
+      // 2. Try selector fallback if text match didn't fire
+      if (!clickedJoin) {
+        const joinSelectors = [
+          'button[jsname="QboAqd"]',
+          'div[jsname="QboAqd"]',
+          '[aria-label*="Ask to join" i]',
+          '[aria-label*="Join now" i]',
+          '[aria-label*="Join" i]'
+        ];
+
+        for (const selector of joinSelectors) {
+          try {
+            const joinBtn = await page.$(selector);
+            if (joinBtn) {
+              await joinBtn.click();
+              console.log(`[BotService] Bot clicked join selector: ${selector}`);
+              clickedJoin = true;
+              break;
+            }
+          } catch {
+            // try next
+          }
+        }
+      }
+
+      if (clickedJoin) {
+        console.log(`[BotService] PulseNote AI Bot successfully requested entry into Google Meet room!`);
+      } else {
+        console.log(`[BotService] Join button not found; bot may already be in meeting room.`);
+      }
+
+      // Wait 5 seconds for host admission into Google Meet room
+      await new Promise((r) => setTimeout(r, 5000));
 
       // Open Google Meet Chat and post announcement message
       try {
-        const chatButton = await page.$('[aria-label*="Chat with everyone"], [aria-label*="chat"]');
-        if (chatButton) {
-          await chatButton.click();
-          await new Promise((r) => setTimeout(r, 1200));
-          const chatInput = await page.$('textarea[aria-label*="Send a message"], textarea');
-          if (chatInput) {
-            await chatInput.type(announcement, { delay: 30 });
-            await page.keyboard.press('Enter');
-            console.log(`[BotService] Bot posted announcement in Google Meet chat!`);
+        const chatSelectors = [
+          '[aria-label*="Chat with everyone" i]',
+          '[aria-label*="chat" i]',
+          'button[aria-label*="chat" i]'
+        ];
+
+        for (const cSel of chatSelectors) {
+          const chatBtn = await page.$(cSel);
+          if (chatBtn) {
+            await chatBtn.click();
+            await new Promise((r) => setTimeout(r, 1500));
+            const chatInput = await page.$('textarea[aria-label*="Send a message" i], textarea, div[contenteditable="true"]');
+            if (chatInput) {
+              await chatInput.type(announcement, { delay: 30 });
+              await page.keyboard.press('Enter');
+              console.log(`[BotService] Bot posted announcement in Google Meet chat!`);
+            }
+            break;
           }
         }
       } catch (chatErr) {
